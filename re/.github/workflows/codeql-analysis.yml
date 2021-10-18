@@ -1,0 +1,34 @@
+name: "CodeQL"
+
+on: [push, pull_request]
+
+jobs:
+  analyze:
+    name: Analyze
+    runs-on: ubuntu-20.04
+
+    strategy:
+      fail-fast: false
+      matrix:
+        language: [ 'cpp' ]
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v2
+
+    - name: Initialize CodeQL
+      uses: github/codeql-action/init@v1
+      with:
+        languages: ${{ matrix.language }}
+
+    - name: Install clang-tools
+      run: |
+        wget -O - https://apt.llvm.org/llvm-snapshot.gpg.key | sudo apt-key add -
+        sudo add-apt-repository "deb http://apt.llvm.org/focal/ llvm-toolchain-focal-12 main"
+        sudo apt-get update && sudo apt-get install -y clang-tools-12
+
+    - run: scan-build-12 --status-bugs make
+
+    - name: Perform CodeQL Analysis
+      uses: github/codeql-action/analyze@v1
+
