@@ -8,8 +8,8 @@ This new repo provides a new metapackage called **baresip-libs** and provides
 
 
 ## Versioning
-In order to simplify the assignment of baresip dependencies, the package baresip-libs
-is assigned with the same version MAJOR.MINOR as baresip itself 
+In order to simplify the assignment of baresip dependencies, baresip-libs
+is tagged with the same version MAJOR.MINOR as baresip itself 
 (e.g. baresip 1.2.x requires baresip-libs 1.2.x), PATCH numbers may be different. 
 
 Sub-packages (baresip-re, baresip-rem and baresip-test) have independent 
