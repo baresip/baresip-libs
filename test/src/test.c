@@ -107,7 +107,6 @@ static const struct test tests[] = {
 	TEST(test_mem_reallocarray),
 	TEST(test_mem_secure),
 	TEST(test_net_if),
-	TEST(test_net_dst_source_addr_get),
 	TEST(test_mqueue),
 	TEST(test_odict),
 	TEST(test_odict_array),
@@ -135,6 +134,7 @@ static const struct test tests[] = {
 	TEST(test_sdp_disabled_rejected),
 	TEST(test_sha1),
 	TEST(test_sip_addr),
+	TEST(test_sip_auth),
 	TEST(test_sip_drequestf),
 	TEST(test_sip_apply),
 	TEST(test_sip_hdr),
@@ -145,11 +145,6 @@ static const struct test tests[] = {
 	TEST(test_sip_transp_add_client_cert),
 #endif
 	TEST(test_sipevent),
-	TEST(test_sipreg_udp),
-	TEST(test_sipreg_tcp),
-#ifdef USE_TLS
-	TEST(test_sipreg_tls),
-#endif
 	TEST(test_sipsess),
 	TEST(test_sipsess_blind_transfer),
 	TEST(test_srtp),
@@ -165,17 +160,17 @@ static const struct test tests[] = {
 	TEST(test_sys_rand),
 	TEST(test_sys_fs_isdir),
 	TEST(test_sys_fs_isfile),
+	TEST(test_sys_fs_fopen),
 	TEST(test_tcp),
 	TEST(test_telev),
 #ifdef USE_TLS
 	TEST(test_tls),
 	TEST(test_tls_ec),
-	/*TEST(test_tls_selfsigned),*/
+	TEST(test_tls_selfsigned),
 	TEST(test_tls_certificate),
 	TEST(test_tls_false_cafile_path),
 	TEST(test_tls_cli_conn_change_cert),
 #endif
-	TEST(test_tmr),
 	TEST(test_tmr_jiffies),
 	TEST(test_tmr_jiffies_usec),
 	TEST(test_turn),
@@ -204,6 +199,13 @@ static const struct test tests[] = {
 static const struct test tests_network[] = {
 	TEST(test_sipevent_network),
 	TEST(test_sip_drequestf_network),
+	TEST(test_net_dst_source_addr_get),
+	TEST(test_rtp_listen),
+	TEST(test_sipreg_udp),
+	TEST(test_sipreg_tcp),
+#ifdef USE_TLS
+	TEST(test_sipreg_tls),
+#endif
 };
 
 
@@ -217,6 +219,60 @@ static char datapath[256] = "./data";
 static uint32_t timeout_override;
 
 enum test_mode test_mode = TEST_NONE;
+
+
+static void hide_output(void)
+{
+	(void)freopen("stdout.out", "w", stdout);
+	(void)freopen("stderr.out", "w", stderr);
+}
+
+
+static void restore_output(int err)
+{
+	FILE *f = NULL;
+	char line[1024];
+
+	fflush(stdout);
+	fflush(stderr);
+
+	/* Restore stdout/stderr */
+#ifdef WIN32
+	freopen("CON", "w", stdout);
+	freopen("CON", "w", stderr);
+#else
+	freopen("/dev/tty", "w", stdout);
+	freopen("/dev/tty", "w", stderr);
+#endif
+
+	if (!err)
+		goto out;
+
+
+	f = fopen("stdout.out", "r");
+	if (!f)
+		goto out;
+
+	while (fgets(line, sizeof(line), f)) {
+		re_fprintf(stdout, "%s", line);
+	}
+	(void)fclose(f);
+
+
+	f = fopen("stderr.out", "r");
+	if (!f)
+		goto out;
+
+	while (fgets(line, sizeof(line), f)) {
+		re_fprintf(stderr, "%s", line);
+	}
+	(void)fclose(f);
+
+out:
+	(void)unlink("stdout.out");
+	(void)unlink("stderr.out");
+}
+
 
 static const struct test *find_test(const char *name)
 {
@@ -309,13 +365,17 @@ int test_oom(const char *name, bool verbose)
 
 	test_mode = TEST_MEMORY;
 
+	if (!verbose)
+		hide_output();
+
 	(void)re_fprintf(stderr, "oom tests %u levels: \n", levels);
 
 	if (name) {
 		const struct test *test = find_test(name);
 		if (!test) {
 			(void)re_fprintf(stderr, "no such test: %s\n", name);
-			return ENOENT;
+			err = ENOENT;
+			goto out;
 		}
 
 		err = testcase_oom(test, levels, verbose);
@@ -330,6 +390,10 @@ int test_oom(const char *name, bool verbose)
 	}
 
 	mem_threshold_set(-1);
+
+out:
+	if (!verbose)
+		restore_output(err);
 
 	if (err) {
 		DEBUG_WARNING("oom: %m\n", err);
@@ -348,17 +412,21 @@ static int test_unit(const char *name, bool verbose)
 	size_t i;
 	int err = 0;
 
+	if (!verbose)
+		hide_output();
+
 	if (name) {
 		const struct test *test = find_test(name);
 		if (!test) {
 			(void)re_fprintf(stderr, "no such test: %s\n", name);
-			return ENOENT;
+			err = ENOENT;
+			goto out;
 		}
 
 		err = test->exec();
 		if (err) {
 			DEBUG_WARNING("%s: test failed (%m)\n", name, err);
-			return err;
+			goto out;
 		}
 	}
 	else {
@@ -384,7 +452,7 @@ static int test_unit(const char *name, bool verbose)
 
 				DEBUG_WARNING("%s: test failed (%m)\n",
 					      tests[i].name, err);
-				return err;
+				goto out;
 			}
 		}
 
@@ -400,24 +468,11 @@ static int test_unit(const char *name, bool verbose)
 		}
 	}
 
+out:
+	if (!verbose)
+		restore_output(err);
+
 	return err;
-}
-
-
-static uint64_t tmr_microseconds(void)
-{
-	struct timeval now;
-	uint64_t usec;
-
-	if (0 != gettimeofday(&now, NULL)) {
-		DEBUG_WARNING("jiffies: gettimeofday() failed (%m)\n", errno);
-		return 0;
-	}
-
-	usec  = (uint64_t)now.tv_sec * (uint64_t)1000000;
-	usec += now.tv_usec;
-
-	return usec;
 }
 
 
@@ -438,14 +493,14 @@ static int testcase_perf(const struct test *test, double *usec_avgp)
 	int err = 0;
 
 	/* dry run */
-	usec_start = tmr_microseconds();
+	usec_start = tmr_jiffies_usec();
 	for (i = 1; i <= DRYRUN_MAX; i++) {
 
 		err = test->exec();
 		if (err)
 			return err;
 
-		usec_stop = tmr_microseconds();
+		usec_stop = tmr_jiffies_usec();
 
 		if ((usec_stop - usec_start) > DRYRUN_USEC)
 			break;
@@ -457,13 +512,13 @@ static int testcase_perf(const struct test *test, double *usec_avgp)
 	n = min(REPEATS_MAX, max(n, REPEATS_MIN));
 
 	/* now for the real measurement */
-	usec_start = tmr_microseconds();
+	usec_start = tmr_jiffies_usec();
 	for (i=0; i<n; i++) {
 		err = test->exec();
 		if (err)
 			return err;
 	}
-	usec_stop = tmr_microseconds();
+	usec_stop = tmr_jiffies_usec();
 
 	if (usec_stop <= usec_start) {
 		DEBUG_WARNING("perf: cannot measure, test is too fast\n");
@@ -542,10 +597,17 @@ int test_perf(const char *name, bool verbose)
 			struct timing *tim = &timingv[i];
 			double usec_avg;
 
+			if (!verbose)
+				hide_output();
+
 			tim->test = &tests[i];
 
 			err = testcase_perf(&tests[i],
 					    &usec_avg);
+
+			if (!verbose)
+				restore_output(err);
+
 			if (err) {
 				if (err == ESKIPPED || err == ENOSYS) {
 					re_printf("skipped: %s\n",
@@ -582,7 +644,7 @@ int test_perf(const char *name, bool verbose)
 		re_fprintf(stderr, "\n");
 	}
 
-	return 0;
+	return err;
 }
 
 
@@ -910,7 +972,7 @@ const char *test_datapath(void)
 }
 
 
-int  test_network(const char *name, bool verbose)
+int test_network(const char *name, bool verbose)
 {
 	size_t i;
 	int err;
