@@ -5,7 +5,7 @@ libre README
 libre is a Generic library for real-time communications with async IO support.
 
 - Copyright (C) 2010 - 2020 Creytiv.com
-- Copyright (C) 2020 - 2021 Baresip Foundation (https://github.com/baresip)
+- Copyright (C) 2020 - 2022 Baresip Foundation (https://github.com/baresip)
 
 ![Build](https://github.com/baresip/re/workflows/Build/badge.svg)
 ![ccheck](https://github.com/baresip/re/workflows/ccheck/badge.svg)
@@ -43,6 +43,16 @@ $ make
 $ sudo make install
 $ sudo ldconfig
 ```
+
+On some distributions, /usr/local/lib may not be included in ld.so.conf. 
+You can check with `grep "/usr/local/lib" /etc/ld.so.conf.d/*.conf` 
+and add if necessary:
+
+```
+$ echo "/usr/local/lib" | sudo tee /etc/ld.so.conf.d/libc.conf
+$ sudo ldconfig
+```
+
 
 ### Build with release
 

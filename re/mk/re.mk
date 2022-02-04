@@ -102,7 +102,7 @@ LD := $(CC)
 CC_LONGVER  := $(shell $(CC) - --version|head -n 1)
 CC_SHORTVER := $(shell $(CC) -dumpversion)
 CC_MAJORVER := $(shell echo $(CC_SHORTVER) |\
-			sed -e 's/\([0-9]*\)\.[0-9]\+\.[0-9]\+/\1/g')
+			sed -E 's/([0-9]+).[0-9]+.[0-9]+/\1/g')
 
 # find-out the compiler's name
 
@@ -240,6 +240,9 @@ endif
 	DFLAGS		:= -MD
 	LIBS		+= -lresolv
 	LFLAGS		+= -fPIC
+	# add libraries for darwin dns servers
+	LFLAGS		+= -framework SystemConfiguration \
+			   -framework CoreFoundation
 	SH_LFLAGS	+= -dynamiclib
 ifeq ($(CC_NAME),gcc)
 	SH_LFLAGS	+= -dylib
@@ -441,17 +444,17 @@ BUILD   := build-$(ARCH)
 CC_TEST = [ -d .cache/$(PROJECT)/cc_test-$(ARCH)/$(1) ] && \
 	echo "yes" && exit 0 || \
 	echo '\#include <$(1)>' | \
-	$(CC) $(CFLAGS) -E - >/dev/null 2>&1 && echo "yes" && \
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E - >/dev/null 2>&1 && echo "yes" && \
 	mkdir -p .cache/$(PROJECT)/cc_test-$(ARCH)/$(1)
 
 CC_TEST_AND = [ -d .cache/$(PROJECT)/cc_test_and-$(ARCH)/$(1) ] && \
 	[ -d .cache/$(PROJECT)/cc_test_and-$(ARCH)/$(2) ] && \
 	echo "yes" && exit 0 || \
 	echo '\#include <$(1)>' | \
-	$(CC) $(CFLAGS) -E - >/dev/null 2>&1 && \
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E - >/dev/null 2>&1 && \
 	mkdir -p .cache/$(PROJECT)/cc_test_and-$(ARCH)/$(1) && \
 	echo '\#include <$(2)>' | \
-	$(CC) $(CFLAGS) -E - >/dev/null 2>&1 && echo "yes" && \
+	$(CC) $(CFLAGS) $(EXTRA_CFLAGS) -E - >/dev/null 2>&1 && echo "yes" && \
 	mkdir -p .cache/$(PROJECT)/cc_test_and-$(ARCH)/$(2)
 
 ##############################################################################
@@ -499,8 +502,6 @@ LIBS    += -lz
 endif
 
 
-ifneq ($(OS),win32)
-
 HAVE_PTHREAD := $(shell $(call CC_TEST,pthread.h))
 ifneq ($(HAVE_PTHREAD),)
 HAVE_PTHREAD_RWLOCK := 1
@@ -510,6 +511,8 @@ ifneq ($(HAVE_LIBPTHREAD),)
 LIBS	+= -lpthread
 endif
 endif
+
+ifneq ($(OS),win32)
 
 ifneq ($(ARCH),mipsel)
 HAVE_GETIFADDRS := $(shell $(call CC_TEST,ifaddrs.h))
@@ -523,7 +526,7 @@ ifneq ($(HAVE_STRERROR_R),)
 CFLAGS += -DHAVE_STRERROR_R
 endif
 
-endif
+endif #!win32
 
 HAVE_GETOPT     := $(shell $(call CC_TEST,getopt.h))
 ifneq ($(HAVE_GETOPT),)
@@ -550,6 +553,13 @@ CFLAGS  += -DHAVE_STDBOOL_H
 HAVE_INET6      := 1
 ifneq ($(HAVE_INET6),)
 CFLAGS  += -DHAVE_INET6
+else
+ifeq ($(HAVE_INET6_IGNORE_DEPRECATED),)
+$(warning HAVE_INET6= is deprecated, add HAVE_INET6_IGNORE_DEPRECATED=1 to \
+	ignore this warning.)
+$(error This will be removed in the next release, please report any problems \
+	with HAVE_INET6 enabled here: https://github.com/baresip/re/issues)
+endif
 endif
 
 ifeq ($(OS),win32)
@@ -814,6 +824,7 @@ clang:
 .PHONY: compile_commands.json
 compile_commands.json:
 	@rm -f $@
+	@find $(BUILD) -name "*.o.json" | grep . > /dev/null
 	@sed -e '1s/^/[/' -e '$$s/,$$/]/' \
 		$(shell find $(BUILD) -name "*.o.json") > $@
 

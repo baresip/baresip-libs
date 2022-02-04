@@ -509,6 +509,9 @@ static int poll_init(struct re *re)
 /** Free all resources */
 static void poll_close(struct re *re)
 {
+	if (!re)
+		return;
+
 	DEBUG_INFO("poll close\n");
 
 	re->fhs = mem_deref(re->fhs);
@@ -763,9 +766,14 @@ static int fd_poll(struct re *re)
 		return EINVAL;
 	}
 
+#ifdef WIN32
+	if (n == SOCKET_ERROR) {
+		return WSAGetLastError();
+	}
+#else
 	if (n < 0)
 		return errno;
-
+#endif
 	/* Check for events */
 	for (i=0; (n > 0) && (i < re->nfds); i++) {
 		int fd, flags = 0;
@@ -1011,6 +1019,7 @@ int re_main(re_signal_h *signalh)
 			break;
 		}
 
+
 		err = fd_poll(re);
 		if (err) {
 			if (EINTR == err)
@@ -1020,8 +1029,14 @@ int re_main(re_signal_h *signalh)
 			/* NOTE: workaround for Darwin */
 			if (EBADF == err)
 				continue;
-#endif
 
+#endif
+#ifdef WIN32
+			if (WSAEINVAL == err) {
+				tmr_poll(&re->tmrl);
+				continue;
+			}
+#endif
 			break;
 		}
 

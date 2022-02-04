@@ -14,6 +14,7 @@ struct sip {
 	struct hash *ht_strans_mrg;
 	struct hash *ht_conn;
 	struct hash *ht_udpconn;
+	struct hash *ht_conncfg;
 	struct dnsc *dnsc;
 	struct stun *stun;
 	struct websock *websock;
@@ -78,11 +79,6 @@ bool sip_transp_supported(struct sip *sip, enum sip_transp tp, int af);
 const char *sip_transp_srvid(enum sip_transp tp);
 bool sip_transp_reliable(enum sip_transp tp);
 int  sip_transp_debug(struct re_printf *pf, const struct sip *sip);
-
-
-/* auth */
-int  sip_auth_encode(struct mbuf *mb, struct sip_auth *auth, const char *met,
-		     const char *uri);
 
 
 /* dialog */

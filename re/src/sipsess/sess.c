@@ -66,6 +66,7 @@ static bool termwait(struct sipsess *sess)
 	bool wait = false;
 
 	sess->terminated = 1;
+	sess->desch   = NULL;
 	sess->offerh  = internal_offer_handler;
 	sess->answerh = internal_answer_handler;
 	sess->progrh  = internal_progress_handler;
@@ -157,6 +158,7 @@ static void destructor(void *arg)
 int sipsess_alloc(struct sipsess **sessp, struct sipsess_sock *sock,
 		  const char *cuser, const char *ctype, struct mbuf *desc,
 		  sip_auth_h *authh, void *aarg, bool aref,
+		  sipsess_desc_h *desch,
 		  sipsess_offer_h *offerh, sipsess_answer_h *answerh,
 		  sipsess_progr_h *progrh, sipsess_estab_h *estabh,
 		  sipsess_info_h *infoh, sipsess_refer_h *referh,
@@ -184,6 +186,7 @@ int sipsess_alloc(struct sipsess **sessp, struct sipsess_sock *sock,
 	sess->sock    = mem_ref(sock);
 	sess->desc    = mem_ref(desc);
 	sess->sip     = mem_ref(sock->sip);
+	sess->desch   = desch;
 	sess->offerh  = offerh  ? offerh  : internal_offer_handler;
 	sess->answerh = answerh ? answerh : internal_answer_handler;
 	sess->progrh  = progrh  ? progrh  : internal_progress_handler;
