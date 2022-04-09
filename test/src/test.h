@@ -119,12 +119,49 @@ extern enum test_mode test_mode;
 		goto out;						\
 	}
 
+/*
+ * NOTE: try to reuse macros from Gtest.
+ */
+
+#define ASSERT_EQ(expected, actual)					\
+	if ((expected) != (actual)) {					\
+		DEBUG_WARNING("ASSERT_EQ: %s:%u: %s():"			\
+			      " expected=%d(0x%x), actual=%d(0x%x)\n",	\
+			      __FILE__, __LINE__, __func__,		\
+			      (expected), (expected),			\
+			      (actual), (actual));			\
+		err = EINVAL;						\
+		goto out;						\
+	}
+
+#define ASSERT_DOUBLE_EQ(expected, actual, prec)			\
+	if (!test_cmp_double((expected), (actual), (prec))) {		\
+		DEBUG_WARNING("selftest: ASSERT_DOUBLE_EQ: %s:%u:"	\
+			" expected=%f, actual=%f\n",			\
+			__FILE__, __LINE__,				\
+			(double)(expected), (double)(actual));		\
+		err = EINVAL;						\
+		goto out;						\
+	}
+
+#define ASSERT_TRUE(cond)					\
+	if (!(cond)) {						\
+		DEBUG_WARNING("ASSERT_TRUE: %s:%u:\n",		\
+			      __FILE__, __LINE__);		\
+		err = EINVAL;					\
+		goto out;					\
+	}
+
+#define EXPECT_EQ    ASSERT_EQ
+#define EXPECT_TRUE  ASSERT_TRUE
+
 
 /* Module API */
 int test_aac(void);
 int test_aes(void);
 int test_aes_gcm(void);
 int test_aubuf(void);
+int test_aulevel(void);
 int test_auresamp(void);
 int test_base64(void);
 int test_bfcp(void);
@@ -158,6 +195,9 @@ int test_g711_alaw(void);
 int test_g711_ulaw(void);
 int test_h264(void);
 int test_h264_sps(void);
+int test_h264_packet(void);
+int test_h265(void);
+int test_h265_packet(void);
 int test_hash(void);
 int test_hmac_sha1(void);
 int test_hmac_sha256(void);
@@ -191,6 +231,10 @@ int test_net_if(void);
 int test_net_dst_source_addr_get(void);
 int test_odict(void);
 int test_odict_array(void);
+int test_trice_cand(void);
+int test_trice_candpair(void);
+int test_trice_checklist(void);
+int test_trice_loop(void);
 int test_remain(void);
 int test_rtmp_play(void);
 int test_rtmp_publish(void);
@@ -203,6 +247,7 @@ int test_rtcp_encode(void);
 int test_rtcp_encode_afb(void);
 int test_rtcp_decode(void);
 int test_rtcp_packetloss(void);
+int test_rtcp_twcc(void);
 int test_sa_class(void);
 int test_sa_cmp(void);
 int test_sa_decode(void);
@@ -253,6 +298,7 @@ int test_tcp(void);
 int test_telev(void);
 int test_tmr_jiffies(void);
 int test_tmr_jiffies_usec(void);
+int test_try_into(void);
 int test_turn(void);
 int test_turn_tcp(void);
 int test_udp(void);
@@ -289,8 +335,8 @@ extern const char test_certificate_rsa[];
 extern const char test_certificate_ecdsa[];
 #endif
 
-/* Network specific tests */
-int  test_network(const char *name, bool verbose);
+/* Integration tests */
+int  test_integration(const char *name, bool verbose);
 int  test_sipevent_network(void);
 int  test_sip_drequestf_network(void);
 
@@ -305,6 +351,7 @@ void test_listcases(void);
 void test_hexdump_dual(FILE *f,
 		       const void *ep, size_t elen,
 		       const void *ap, size_t alen);
+bool test_cmp_double(double a, double b, double precision);
 int re_main_timeout(uint32_t timeout_ms);
 int test_load_file(struct mbuf *mb, const char *filename);
 int test_write_file(struct mbuf *mb, const char *filename);

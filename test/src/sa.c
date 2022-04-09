@@ -145,7 +145,7 @@ int test_sa_decode(void)
 		if (testv[i].err != e) {
 			DEBUG_WARNING("sa_decode: test %u:"
 				      " expected (%m) got (%m) [%s]\n", i,
-				      testv[i].err, err, testv[i].str);
+				      testv[i].err, e, testv[i].str);
 			err = EINVAL;
 			break;
 		}
@@ -193,14 +193,14 @@ int test_sa_class(void)
 	} testv[] = {
 		{false, false, true,  "0.0.0.0"},
 		{false, false, false, "1.2.3.4"},
-		{false, false, false, "127.0.0.0"},
+		{true,  false, false, "127.0.0.0"},
 		{true,  false, false, "127.0.0.1"},
+		{true,  false, false, "127.3.0.3"},
 		{false, true,  false, "169.254.1.2"},
 #ifdef HAVE_INET6
 		{false, false, true,  "::"},
 		{true,  false, false, "::1"},
-		{false, true,  false,
-		 "fe80::215:58ff:fe2d:90ab"},
+		{false, true,  false, "fe80::215:58ff:fe2d:90ab"},
 		{false, false, false, "2610:a0:c779:b::d1ad:35b4"}
 #endif
 	};
@@ -290,6 +290,9 @@ int test_sa_ntop(void)
 			break;
 		}
 
+		err = sa_ntop(&sa0, buf, 2);
+		TEST_NOT_EQUALS(0, err);
+
 		err = sa_ntop(&sa0, buf, sizeof(buf));
 		if (err)
 			break;
@@ -314,6 +317,7 @@ int test_sa_ntop(void)
 		}
 	}
 
+out:
 	return err;
 }
 

@@ -15,6 +15,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/time.h>
+#include <math.h>
 #ifdef HAVE_PTHREAD
 #include <pthread.h>
 #endif
@@ -41,6 +42,7 @@ static const struct test tests[] = {
 	TEST(test_aes),
 	TEST(test_aes_gcm),
 	TEST(test_aubuf),
+	TEST(test_aulevel),
 	TEST(test_auresamp),
 	TEST(test_base64),
 	TEST(test_bfcp),
@@ -78,6 +80,9 @@ static const struct test tests[] = {
 	TEST(test_g711_ulaw),
 	TEST(test_h264),
 	TEST(test_h264_sps),
+	TEST(test_h264_packet),
+	TEST(test_h265),
+	TEST(test_h265_packet),
 	TEST(test_hash),
 	TEST(test_hmac_sha1),
 	TEST(test_hmac_sha256),
@@ -121,6 +126,7 @@ static const struct test tests[] = {
 	TEST(test_rtcp_encode_afb),
 	TEST(test_rtcp_decode),
 	TEST(test_rtcp_packetloss),
+	TEST(test_rtcp_twcc),
 	TEST(test_sa_class),
 	TEST(test_sa_cmp),
 	TEST(test_sa_decode),
@@ -171,8 +177,11 @@ static const struct test tests[] = {
 	TEST(test_tls_false_cafile_path),
 	TEST(test_tls_cli_conn_change_cert),
 #endif
-	TEST(test_tmr_jiffies),
-	TEST(test_tmr_jiffies_usec),
+	TEST(test_trice_cand),
+	TEST(test_trice_candpair),
+	TEST(test_trice_checklist),
+	TEST(test_trice_loop),
+	TEST(test_try_into),
 	TEST(test_turn),
 	TEST(test_turn_tcp),
 	TEST(test_udp),
@@ -196,16 +205,18 @@ static const struct test tests[] = {
 };
 
 
-static const struct test tests_network[] = {
+static const struct test tests_integration[] = {
+	TEST(test_net_dst_source_addr_get),
 	TEST(test_sipevent_network),
 	TEST(test_sip_drequestf_network),
-	TEST(test_net_dst_source_addr_get),
 	TEST(test_rtp_listen),
 	TEST(test_sipreg_udp),
 	TEST(test_sipreg_tcp),
 #ifdef USE_TLS
 	TEST(test_sipreg_tls),
 #endif
+	TEST(test_tmr_jiffies),
+	TEST(test_tmr_jiffies_usec),
 };
 
 
@@ -794,6 +805,12 @@ void test_listcases(void)
 }
 
 
+bool test_cmp_double(double a, double b, double precision)
+{
+	return fabs(a - b) < precision;
+}
+
+
 void test_hexdump_dual(FILE *f,
 		       const void *ep, size_t elen,
 		       const void *ap, size_t alen)
@@ -972,18 +989,18 @@ const char *test_datapath(void)
 }
 
 
-int test_network(const char *name, bool verbose)
+int test_integration(const char *name, bool verbose)
 {
 	size_t i;
-	int err;
+	int err = 0;
 	const struct test *test;
 	(void) verbose;
 
-	(void)re_fprintf(stderr, "network tests\n");
+	(void)re_fprintf(stderr, "integration tests\n");
 
-	for (i=0; i<ARRAY_SIZE(tests_network); i++) {
+	for (i=0; i<ARRAY_SIZE(tests_integration); i++) {
 
-		test = &tests_network[i];
+		test = &tests_integration[i];
 		if (str_isset(name) && test->name)
 			continue;
 
@@ -1001,5 +1018,5 @@ int test_network(const char *name, bool verbose)
 		}
 	}
 
-	return 0;
+	return err;
 }
