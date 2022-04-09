@@ -6,7 +6,9 @@
 
 #include <string.h>
 #include <re.h>
-#include <rem.h>
+#include <rem_au.h>
+#include <rem_aulevel.h>
+#include <rem_auframe.h>
 
 
 /**
@@ -36,6 +38,7 @@ void auframe_init(struct auframe *af, enum aufmt fmt, void *sampv,
 	af->sampv = sampv;
 	af->sampc = sampc;
 	af->srate = srate;
+	af->level = AULEVEL_UNDEF;
 	af->ch = ch;
 }
 
@@ -58,6 +61,7 @@ size_t auframe_size(const struct auframe *af)
 	if (sz == 0) {
 		re_printf("auframe: size: illegal format %d (%s)\n",
 			af->fmt, aufmt_name(af->fmt));
+		sz = 1;
 	}
 
 	return af->sampc * sz;
@@ -75,4 +79,25 @@ void auframe_mute(struct auframe *af)
 		return;
 
 	memset(af->sampv, 0, auframe_size(af));
+}
+
+
+/**
+ * Get audio level (only calculated once)
+ *
+ * @note Set af->level = AULEVEL_UNDEF to force re-calculation
+ *
+ * @param af  Audio frame
+ *
+ * @return Audio level expressed in dBov on success and AULEVEL_UNDEF on error
+ */
+double auframe_level(struct auframe *af)
+{
+	if (!af)
+		return AULEVEL_UNDEF;
+
+	if (af->level == AULEVEL_UNDEF)
+		af->level = aulevel_calc_dbov(af->fmt, af->sampv, af->sampc);
+
+	return af->level;
 }

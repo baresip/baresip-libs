@@ -6,11 +6,14 @@
 
 #define _BSD_SOURCE 1
 #define _DEFAULT_SOURCE 1
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #include <pthread.h>
 #include <string.h>
 #include <re.h>
 #include <rem_au.h>
+#include <rem_aulevel.h>
 #include <rem_auframe.h>
 #include <rem_aubuf.h>
 #include <rem_aufile.h>
@@ -113,7 +116,7 @@ static void *aumix_thread(void *arg)
 		}
 		else {
 			pthread_mutex_unlock(&mix->mutex);
-			(void)usleep(4000);
+			sys_usleep(4000);
 			pthread_mutex_lock(&mix->mutex);
 		}
 

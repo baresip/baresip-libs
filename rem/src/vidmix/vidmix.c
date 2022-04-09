@@ -6,7 +6,9 @@
 
 #define _BSD_SOURCE 1
 #define _DEFAULT_SOURCE 1
+#ifdef HAVE_UNISTD_H
 #include <unistd.h>
+#endif
 #define __USE_UNIX98 1
 #include <pthread.h>
 #include <string.h>
@@ -78,10 +80,7 @@ static void source_destructor(void *arg)
 {
 	struct vidmix_source *src = arg;
 
-	if (src->run) {
-		src->run = false;
-		pthread_join(src->thread, NULL);
-	}
+	vidmix_source_stop(src);
 
 	if (src->le.list) {
 		pthread_rwlock_wrlock(&src->mix->rwlock);
@@ -199,7 +198,7 @@ static void *vidmix_thread(void *arg)
 		uint64_t now;
 
 		pthread_mutex_unlock(&src->mutex);
-		(void)usleep(4000);
+		sys_usleep(4000);
 		pthread_mutex_lock(&src->mutex);
 
 		now = tmr_jiffies();
@@ -285,7 +284,7 @@ static void *content_thread(void *arg)
 		uint64_t now;
 
 		pthread_mutex_unlock(&src->mutex);
-		(void)usleep(4000);
+		sys_usleep(4000);
 		pthread_mutex_lock(&src->mutex);
 
 		now = tmr_jiffies();
@@ -538,7 +537,9 @@ void vidmix_source_stop(struct vidmix_source *src)
 		return;
 
 	if (src->run) {
+		pthread_mutex_lock(&src->mutex);
 		src->run = false;
+		pthread_mutex_unlock(&src->mutex);
 		pthread_join(src->thread, NULL);
 	}
 }
@@ -733,5 +734,7 @@ void vidmix_source_put(struct vidmix_source *src, const struct vidframe *frame)
 		pthread_rwlock_unlock(&src->mix->rwlock);
 	}
 
+	pthread_rwlock_wrlock(&src->mix->rwlock);
 	vidframe_copy(src->frame_rx, frame);
+	pthread_rwlock_unlock(&src->mix->rwlock);
 }

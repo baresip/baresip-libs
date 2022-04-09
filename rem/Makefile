@@ -5,17 +5,17 @@
 #
 
 # Main version number
-VER_MAJOR := 1
+VER_MAJOR := 2
 VER_MINOR := 0
-VER_PATCH := 0
+VER_PATCH := 1
 
 # Development version, comment out on a release
 # Increment for breaking changes (dev2, dev3...)
-VER_PRE   := dev3
+#VER_PRE   := dev
 
 # Libtool similar ABI versioning
 # https://github.com/baresip/re/wiki/ABI-Versioning
-ABI_CUR   := 0
+ABI_CUR   := 2
 ABI_REV   := 0
 ABI_AGE   := 0
 
@@ -28,7 +28,7 @@ else
 VERSION   := $(VER_MAJOR).$(VER_MINOR).$(VER_PATCH)-$(VER_PRE)
 endif
 OPT_SPEED := 1
-LIBRE_MIN := 2.0.1-dev
+LIBRE_MIN := 2.1.1
 
 ifndef LIBRE_MK
 LIBRE_MK  := $(shell [ -f ../re/mk/re.mk ] && \
@@ -91,6 +91,7 @@ MODULES += vid vidconv
 MODULES += aac
 MODULES += avc
 MODULES += h264
+MODULES += h265
 
 LIBS    += -lm
 
@@ -183,7 +184,7 @@ $(BUILD): Makefile $(MK) $(MODMKS)
 .PHONY: clean
 clean:
 	@rm -rf $(SHARED) $(STATIC) librem.pc test.d test.o test $(BUILD) \
-		.cache/rem
+		.cache/rem build
 
 
 install: $(SHARED) $(STATIC) librem.pc
