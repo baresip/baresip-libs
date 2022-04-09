@@ -6,9 +6,9 @@ test.o
 *stamp
 *.previous
 libre.a
-libre.dylib
+libre.*dylib
 libre.pc
-libre.so
+libre.so*
 *.gcov
 
 # Windows build folder

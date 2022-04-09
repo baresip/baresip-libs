@@ -99,7 +99,7 @@ ifeq ($(CC),cc)
 endif
 LD := $(CC)
 
-CC_LONGVER  := $(shell $(CC) - --version|head -n 1)
+CC_LONGVER  := $(shell $(CC) --version|head -n 1)
 CC_SHORTVER := $(shell $(CC) -dumpversion)
 CC_MAJORVER := $(shell echo $(CC_SHORTVER) |\
 			sed -E 's/([0-9]+).[0-9]+.[0-9]+/\1/g')
@@ -339,10 +339,9 @@ CFLAGS  += -std=c11
 HAVE_ATOMIC := 1
 endif
 
-CFLAGS  += -pedantic
-
 ifneq ($(HAVE_ATOMIC),)
 CFLAGS  += -DHAVE_ATOMIC
+CFLAGS  += -pedantic
 endif
 
 
@@ -393,7 +392,7 @@ endif
 
 endif
 
-ifneq ($(strip $(filter __arm64__ ,$(PREDEF))),)
+ifneq ($(strip $(filter __arm64__ __aarch64__,$(PREDEF))),)
 ARCH   := arm64
 endif
 
@@ -533,11 +532,6 @@ ifneq ($(HAVE_GETOPT),)
 CFLAGS  += -DHAVE_GETOPT
 endif
 
-HAVE_INTTYPES_H := $(shell $(call CC_TEST,inttypes.h))
-ifneq ($(HAVE_INTTYPES_H),)
-CFLAGS  += -DHAVE_INTTYPES_H
-endif
-
 HAVE_NET_ROUTE_H := $(shell $(call CC_TEST,net/route.h))
 ifneq ($(HAVE_NET_ROUTE_H),)
 CFLAGS  += -DHAVE_NET_ROUTE_H
@@ -585,6 +579,9 @@ endif
 HAVE_EXECINFO := $(shell $(call CC_TEST,execinfo.h))
 ifneq ($(HAVE_EXECINFO),)
 CFLAGS  += -DHAVE_EXECINFO
+ifeq ($(OS),openbsd)
+LFLAGS  += -lexecinfo
+endif
 endif
 
 CFLAGS  += -DHAVE_FORK
@@ -710,6 +707,15 @@ info::
 	@echo "  MOD_SUFFIX:    $(MOD_SUFFIX)"
 	@echo "  BIN_SUFFIX:    $(BIN_SUFFIX)"
 
+
+.PHONY: cmake
+cmake:
+	cmake -B build && cmake --build build --parallel
+
+
+.PHONY: ninja
+ninja:
+	cmake -B build -G Ninja && cmake --build build
 
 ##############################################################################
 #

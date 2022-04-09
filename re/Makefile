@@ -6,20 +6,17 @@
 
 # Main version number
 VER_MAJOR := 2
-VER_MINOR := 0
-VER_PATCH := 1
+VER_MINOR := 2
+VER_PATCH := 2
 
 # Development version, comment out on a release
 # Increment for breaking changes (dev2, dev3...)
-VER_PRE   := dev13
+# VER_PRE   := dev
 
-# Libtool similar ABI versioning
-# https://github.com/baresip/re/wiki/ABI-Versioning
-ABI_CUR   := 1
-ABI_REV   := 1
-ABI_AGE   := 0
-
-ABI_MAJOR := $(shell expr $(ABI_CUR) - $(ABI_AGE))
+# bump Major if ABI breaks
+ABI_MAJOR := 4
+ABI_AGE   := $(VER_MINOR)
+ABI_REV   := $(VER_PATCH)
 
 # Verbose and silent build modes
 ifeq ($(V),)
@@ -41,7 +38,6 @@ include $(MK)
 MODULES += sip sipevent sipreg sipsess
 MODULES += uri http httpauth msg websock
 MODULES += stun turn ice
-MODULES += natbd
 MODULES += rtp sdp jbuf telev
 MODULES += dns
 MODULES += md5 crc32 sha hmac base64
@@ -54,6 +50,8 @@ MODULES += aes srtp
 MODULES += odict
 MODULES += json
 MODULES += rtmp
+MODULES += shim
+MODULES += trice
 
 INSTALL := install
 ifeq ($(DESTDIR),)
@@ -130,7 +128,7 @@ $(BUILD): Makefile $(MK) $(MODMKS)
 .PHONY: clean
 clean:
 	$(HIDE)rm -rf $(SHARED) $(STATIC) libre.pc test.d test.o test \
-		$(BUILD) .cache/re
+		build $(BUILD) .cache/re
 	$(HIDE)rm -f compile_commands.json
 
 

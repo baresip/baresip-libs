@@ -22,9 +22,19 @@
 #include <direct.h>
 #include <lmaccess.h>
 #endif
+#ifdef HAVE_IO_H
+#include <io.h>
+#endif
 #include <re_types.h>
 #include <re_fmt.h>
 #include <re_sys.h>
+
+
+#ifdef WIN32
+#define open _open
+#define read _read
+#define close _close
+#endif
 
 
 /**
@@ -170,6 +180,9 @@ bool fs_isfile(const char *file)
  */
 int fs_fopen(FILE **fp, const char *file, const char *mode)
 {
+#ifdef WIN32
+	return fopen_s(fp, file, mode);
+#else
 	FILE *pfile;
 	int fd;
 
@@ -180,10 +193,10 @@ int fs_fopen(FILE **fp, const char *file, const char *mode)
 		goto fopen;
 
 	fd = open(file, O_WRONLY | O_CREAT, S_IWUSR | S_IRUSR);
-	if (!fd)
+	if (fd == -1)
 		return errno;
-	else
-		(void)close(fd);
+
+	(void)close(fd);
 
 fopen:
 	pfile = fopen(file, mode);
@@ -193,4 +206,5 @@ fopen:
 	*fp = pfile;
 
 	return 0;
+#endif
 }

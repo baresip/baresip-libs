@@ -30,6 +30,7 @@ enum {
 	CONN_TIMEOUT = 10 * 1000,
 	IDLE_TIMEOUT = 30 * 1000,
 	SRVC_MAX = 32,
+	RR_MAX = 32,
 };
 
 
@@ -196,7 +197,7 @@ static bool query_cmp_handler(struct le *le, void *arg)
 static int reply_recv(struct dnsc *dnsc, struct mbuf *mb)
 {
 	struct dns_query *q = NULL;
-	uint32_t i, j, nv[3];
+	uint32_t nv[3];
 	struct dnsquery dq;
 	int err = 0;
 
@@ -243,9 +244,15 @@ static int reply_recv(struct dnsc *dnsc, struct mbuf *mb)
 	nv[1] = dq.hdr.nauth;
 	nv[2] = dq.hdr.nadd;
 
-	for (i=0; i<ARRAY_SIZE(nv); i++) {
+	for (uint32_t i = 0; i < ARRAY_SIZE(nv); i++) {
+		uint32_t l = nv[i];
 
-		for (j=0; j<nv[i]; j++) {
+		if (l > RR_MAX) {
+			l = RR_MAX;
+			DEBUG_WARNING("limit rr records %d\n", l);
+		}
+
+		for (uint32_t j = 0; j < l; j++) {
 
 			struct dnsrr *rr = NULL;
 
@@ -710,7 +717,7 @@ static int query(struct dns_query **qp, struct dnsc *dnsc, uint8_t opcode,
 
 	case IPPROTO_TCP:
 		q->mb.pos = 0;
-		(void)mbuf_write_u16(&q->mb, htons(q->mb.end - 2));
+		(void)mbuf_write_u16(&q->mb, htons((uint16_t)q->mb.end - 2));
 
 		err = send_tcp(q);
 		if (err)
@@ -856,7 +863,10 @@ int dnsc_alloc(struct dnsc **dcpp, const struct dnsc_conf *conf,
 	       const struct sa *srvv, uint32_t srvc)
 {
 	struct dnsc *dnsc;
-	struct sa laddr, laddr6;
+	struct sa laddr;
+#ifdef HAVE_INET6
+	struct sa laddr6;
+#endif
 	int err;
 
 	if (!dcpp)

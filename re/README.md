@@ -124,7 +124,6 @@ Patches can sent via Github
 | mod      | stable   | Run-time module loading                        |
 | mqueue   | stable   | Thread-safe message queue                      |
 | msg      | stable   | Generic message component library              |
-| natbd    | stable   | NAT Behavior Discovery using STUN              |
 | net      | stable   | Networking routines                            |
 | odict    | stable   | Ordered Dictionary                             |
 | rtmp     | stable   | Real Time Messaging Protocol                   |
@@ -246,8 +245,8 @@ legend:
 
 ### Supported compilers:
 
-* gcc 4.x or later
-* ms vc2003 compiler
+* gcc 4.9 or later
+* MSVC 2019
 * clang 3.x or later
 
 
@@ -256,6 +255,7 @@ legend:
 * OpenSSL version 1.0.2
 * OpenSSL version 1.1.0
 * OpenSSL version 1.1.1
+* OpenSSL version 3.0.x
 * LibreSSL version 2.x
 * LibreSSL version 3.x
 

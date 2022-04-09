@@ -222,7 +222,10 @@ static struct sip_conn *conn_find(struct sip *sip, const struct sa *paddr,
 
 		struct sip_conn *conn = le->data;
 
-		if (!secure != (conn->sc == NULL))
+		if (secure && !conn->sc)
+			continue;
+
+		if (!secure && conn->sc)
 			continue;
 
 		if (!sa_cmp(&conn->paddr, paddr, SA_ALL))
@@ -1723,7 +1726,6 @@ int  sip_settos(struct sip *sip, uint8_t tos)
 		case SIP_TRANSP_TCP:
 		case SIP_TRANSP_TLS:
 			err = tcp_settos(transp->sock, tos);
-			break;
 			break;
 		default:
 			break;

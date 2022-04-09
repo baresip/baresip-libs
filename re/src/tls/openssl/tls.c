@@ -234,10 +234,6 @@ int tls_alloc(struct tls **tlsp, enum tls_method method, const char *keyfile,
 		goto out;
 	}
 
-#if (OPENSSL_VERSION_NUMBER < 0x00905100L)
-	SSL_CTX_set_verify_depth(tls->ctx, 1);
-#endif
-
 #if defined(TRACE_SSL) && (OPENSSL_VERSION_NUMBER >= 0x10101000L)
 	SSL_CTX_set_keylog_callback(tls->ctx, tls_keylogger_cb);
 #endif
@@ -332,14 +328,14 @@ int tls_add_cafile_path(struct tls *tls, const char *cafile,
 
 
 /**
- * Add trusted CA certificates given as string.
+ * Add trusted CA certificates given as string
  *
  * @param tls    TLS Context
- * @param capem  The trusted CA as null-terminated string given in PEM format.
+ * @param capem  Trusted CA as null-terminated string given in PEM format
  *
  * @return 0 if success, otherwise errorcode
  */
-int tls_add_capem(struct tls *tls, const char *capem)
+int tls_add_capem(const struct tls *tls, const char *capem)
 {
 	X509_STORE *store;
 	X509 *x509;
@@ -373,6 +369,54 @@ int tls_add_capem(struct tls *tls, const char *capem)
 
 out:
 	X509_free(x509);
+	BIO_free(bio);
+
+	return err;
+}
+
+
+/**
+ * Add trusted CRL certificates given as string
+ *
+ * @param tls  TLS Context
+ * @param pem  Trusted CRL as null-terminated string given in PEM format
+ *
+ * @return 0 if success, otherwise errorcode
+ */
+int tls_add_crlpem(const struct tls *tls, const char *pem)
+{
+	X509_STORE *store;
+	X509_CRL *crl;
+	BIO *bio;
+	int ok;
+	int err = 0;
+
+	if (!tls || !pem || !tls->ctx)
+		return EINVAL;
+
+	store = SSL_CTX_get_cert_store(tls->ctx);
+	if (!store)
+		return EINVAL;
+
+	bio  = BIO_new_mem_buf(pem, (int)strlen(pem));
+	if (!bio)
+		return EINVAL;
+
+	crl = PEM_read_bio_X509_CRL(bio, NULL, 0, NULL);
+	if (!crl) {
+		err = EINVAL;
+		DEBUG_WARNING("Could not read certificate crlpem\n");
+		goto out;
+	}
+
+	ok = X509_STORE_add_crl(store, crl);
+	if (!ok) {
+		err = EINVAL;
+		DEBUG_WARNING("Could not add certificate crlpem\n");
+	}
+
+out:
+	X509_CRL_free(crl);
 	BIO_free(bio);
 
 	return err;
@@ -586,8 +630,8 @@ int tls_set_selfsigned_rsa(struct tls *tls, const char *cn, size_t bits)
 {
 	EVP_PKEY *key = NULL;
 	X509 *cert = NULL;
-	BIGNUM *bn = NULL;
 #ifndef OPENSSL_VERSION_MAJOR
+	BIGNUM *bn = NULL;
 	RSA *rsa = NULL;
 #endif
 	int r, err = ENOMEM;
@@ -619,6 +663,7 @@ int tls_set_selfsigned_rsa(struct tls *tls, const char *cn, size_t bits)
 	if (!EVP_PKEY_set1_RSA(key, rsa))
 		goto out;
 #endif
+
 	if (tls_generate_cert(&cert, cn))
 		goto out;
 
@@ -654,10 +699,10 @@ int tls_set_selfsigned_rsa(struct tls *tls, const char *cn, size_t bits)
 #ifndef OPENSSL_VERSION_MAJOR
 	if (rsa)
 		RSA_free(rsa);
-#endif
 
 	if (bn)
 		BN_free(bn);
+#endif
 
 	if (err)
 		ERR_clear_error();
@@ -767,7 +812,7 @@ int tls_set_certificate_der(struct tls *tls, enum tls_keytype keytype,
 
 	buf_cert = cert;
 
-	x509 = d2i_X509(NULL, &buf_cert, len_cert);
+	x509 = d2i_X509(NULL, &buf_cert, (long)len_cert);
 	if (!x509)
 		goto out;
 
@@ -776,7 +821,7 @@ int tls_set_certificate_der(struct tls *tls, enum tls_keytype keytype,
 		len_key = len_cert - (buf_cert - cert);
 	}
 
-	pkey = d2i_PrivateKey(type, NULL, &key, len_key);
+	pkey = d2i_PrivateKey(type, NULL, &key, (long)len_key);
 	if (!pkey)
 		goto out;
 

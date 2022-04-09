@@ -25,6 +25,7 @@ extern "C" {
 #include "re_bfcp.h"
 #include "re_btrace.h"
 #include "re_conf.h"
+#include "re_convert.h"
 #include "re_crc32.h"
 #include "re_dns.h"
 #include "re_hash.h"
@@ -51,7 +52,6 @@ extern "C" {
 #include "re_sipreg.h"
 #include "re_sipsess.h"
 #include "re_stun.h"
-#include "re_natbd.h"
 #include "re_srtp.h"
 #include "re_sys.h"
 #include "re_tcp.h"
@@ -62,6 +62,8 @@ extern "C" {
 #include "re_turn.h"
 #include "re_udp.h"
 #include "re_websock.h"
+#include "re_shim.h"
+#include "re_trice.h"
 
 #ifdef __cplusplus
 }
