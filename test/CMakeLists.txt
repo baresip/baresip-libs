@@ -31,6 +31,8 @@ option(USE_OPENSSL "Enable OpenSSL" ${OPENSSL_FOUND})
 
 include_directories(
   src
+  ../re/include
+  ../rem/include
   /usr/local/include
   /usr/local/include/re
   /usr/local/include/rem
@@ -147,4 +149,4 @@ endif()
 add_executable(${PROJECT_NAME}
   ${SRCS}
 )
-target_link_libraries(${PROJECT_NAME} -lrem -lre -lz -lpthread)
+target_link_libraries(${PROJECT_NAME} rem re -lz -lpthread -lm)
