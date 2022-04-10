@@ -12,4 +12,4 @@ dist: build
 
 .PHONY: clean
 clean:
-	@rm -Rf build dist
+	@rm -Rf build dist CMakeCache.txt CMakeFiles
