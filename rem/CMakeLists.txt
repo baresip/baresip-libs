@@ -63,6 +63,7 @@ add_library(${PROJECT_NAME}
   src/aac/aac.c
   src/au/fmt.c
   src/aubuf/aubuf.c
+  src/aubuf/ajb.c
   src/auconv/auconv.c
   src/aufile/aufile.c
   src/aufile/wave.c
@@ -92,4 +93,4 @@ add_library(${PROJECT_NAME}
 # Main target object
 #
 
-target_link_libraries(${PROJECT_NAME} -lre -lpthread)
+target_link_libraries(${PROJECT_NAME} re -lpthread -lm)
