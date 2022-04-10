@@ -6,6 +6,10 @@ build:
 ninja:
 	cmake -B build -G Ninja && cmake --build build --parallel
 
+.PHONY: dist
+dist: build
+	cmake --install build --prefix dist
+
 .PHONY: clean
 clean:
-	@rm -Rf build
+	@rm -Rf build dist
