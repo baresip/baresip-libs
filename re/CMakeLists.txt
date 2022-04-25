@@ -49,6 +49,7 @@ endif()
 
 option(USE_OPENSSL "Enable OpenSSL" ${OPENSSL_FOUND})
 option(USE_BFCP "Enable BFCP" ON)
+option(USE_PCP "Enable PCP" ON)
 option(USE_RTMP "Enable RTMP" ON)
 option(USE_SIP "Enable SIP" ON)
 
@@ -57,7 +58,9 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_EXTENSIONS OFF)
 
-if(NOT MSVC)
+if(MSVC)
+  add_compile_options("/W3")
+else()
   add_compile_options(
     -Wall -Wextra -Wmissing-declarations -Wmissing-prototypes
     -Wstrict-prototypes -Wbad-function-cast -Wnested-externs
@@ -120,6 +123,11 @@ if(MSVC)
   )
 endif()
 
+if(WIN32)
+  add_definitions(
+    -DWIN32 -D_WIN32_WINNT=0x0600
+  )
+endif()
 
 if(USE_OPENSSL)
   add_definitions(
@@ -135,10 +143,14 @@ endif()
 
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  add_definitions(-DDARWIN -DHAVE_KQUEUE)
+  add_definitions(-DHAVE_KQUEUE -DDARWIN)
   include_directories(/opt/local/include)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
+  add_definitions(-DHAVE_KQUEUE -DFREEBSD)
+elseif(${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
+  add_definitions(-DHAVE_KQUEUE -DOPENBSD)
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  add_definitions(-DHAVE_EPOLL)
+  add_definitions(-DHAVE_EPOLL -DLINUX)
 endif()
 
 
@@ -150,6 +162,11 @@ add_definitions(
   -DVER_MINOR=${PROJECT_VERSION_MINOR}
   -DVER_PATCH=${PROJECT_VERSION_PATCH}
 )
+
+if(${CMAKE_BUILD_TYPE} MATCHES "[Rr]el")
+  add_definitions(-DRELEASE)
+endif()
+
 
 ##############################################################################
 #
@@ -285,7 +302,6 @@ set(SRCS
 
   src/mbuf/mbuf.c
 
-  src/md5/md5.c
   src/md5/wrap.c
 
   src/mem/mem.c
@@ -402,6 +418,18 @@ if(USE_BFCP)
     src/bfcp/msg.c
     src/bfcp/reply.c
     src/bfcp/request.c
+  )
+endif()
+
+
+if(USE_PCP)
+  list(APPEND SRCS
+    src/pcp/msg.c
+    src/pcp/option.c
+    src/pcp/payload.c
+    src/pcp/pcp.c
+    src/pcp/reply.c
+    src/pcp/request.c
   )
 endif()
 
@@ -582,10 +610,13 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
     PUBLIC "-framework SystemConfiguration" "-framework CoreFoundation"
   )
 endif()
+
 target_link_libraries(re
   PUBLIC ${OPENSSL_LIBRARIES} ${Backtrace_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}
   PRIVATE -L/opt/local/lib
 )
+
+target_include_directories(re PUBLIC include)
 
 set_target_properties(re PROPERTIES PUBLIC_HEADER "${HEADERS}")
 
@@ -600,9 +631,22 @@ endif()
 #
 
 install(TARGETS re-shared re
-  LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
-  PUBLIC_HEADER DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/re
+  LIBRARY
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT re_run
+  ARCHIVE
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT re_dev
+  PUBLIC_HEADER
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/re
+    COMPONENT re_dev
+)
+
+install(TARGETS re-shared
+  LIBRARY
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    NAMELINK_ONLY
+    COMPONENT re_dev
 )
 
 
