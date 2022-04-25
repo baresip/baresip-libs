@@ -29,6 +29,8 @@ find_package(OpenSSL)
 
 option(USE_OPENSSL "Enable OpenSSL" ${OPENSSL_FOUND})
 
+set(CMAKE_C_STANDARD 11)
+
 include_directories(
   src
   ../re/include
@@ -47,7 +49,7 @@ add_definitions(
   -DHAVE_SIGNAL
   -DHAVE_UNISTD_H
   -DUSE_ZLIB
-  )
+)
 
 if(USE_OPENSSL)
   add_definitions(
@@ -64,10 +66,10 @@ endif()
 
 ##############################################################################
 #
-# Source section
+# Source/Header section
 #
 
-set (SRCS
+set(SRCS
   src/aac.c
   src/aes.c
   src/aubuf.c
@@ -108,6 +110,7 @@ set (SRCS
   src/mqueue.c
   src/net.c
   src/odict.c
+  src/pcp.c
   src/remain.c
   src/rtcp.c
   src/rtmp.c
@@ -146,7 +149,11 @@ if(USE_OPENSSL)
   )
 endif()
 
-add_executable(${PROJECT_NAME}
-  ${SRCS}
-)
+
+##############################################################################
+#
+# Main target object
+#
+
+add_executable(${PROJECT_NAME} ${SRCS})
 target_link_libraries(${PROJECT_NAME} rem re -lz -lpthread -lm)
