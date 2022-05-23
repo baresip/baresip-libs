@@ -16,9 +16,6 @@
 #include <stdlib.h>
 #include <sys/time.h>
 #include <math.h>
-#ifdef HAVE_PTHREAD
-#include <pthread.h>
-#endif
 #include <re.h>
 #include "test.h"
 
@@ -177,6 +174,7 @@ static const struct test tests[] = {
 	TEST(test_tls_certificate),
 	TEST(test_tls_false_cafile_path),
 	TEST(test_tls_cli_conn_change_cert),
+	TEST(test_tls_session_reuse_tls_v12),
 #endif
 	TEST(test_trice_cand),
 	TEST(test_trice_candpair),
@@ -198,6 +196,7 @@ static const struct test tests[] = {
 	TEST(test_vidconv_pixel_formats),
 	TEST(test_websock),
 	TEST(test_trace),
+	TEST(test_thread),
 
 #ifdef USE_TLS
 	/* combination tests: */
@@ -218,6 +217,7 @@ static const struct test tests_integration[] = {
 #endif
 	TEST(test_tmr_jiffies),
 	TEST(test_tmr_jiffies_usec),
+	TEST(test_dns_integration),
 };
 
 
@@ -678,15 +678,14 @@ int test_reg(const char *name, bool verbose)
 }
 
 
-#ifdef HAVE_PTHREAD
 struct thread {
 	const struct test *test;
-	pthread_t tid;
+	thrd_t tid;
 	int err;
 };
 
 
-static void *thread_handler(void *arg)
+static int thread_handler(void *arg)
 {
 	struct thread *thr = arg;
 	int err;
@@ -695,7 +694,7 @@ static void *thread_handler(void *arg)
 	if (err) {
 		DEBUG_WARNING("thread: re_thread_init failed %m\n", err);
 		thr->err = err;
-		return NULL;
+		return 0;
 	}
 
 	err = thr->test->exec();
@@ -714,7 +713,7 @@ static void *thread_handler(void *arg)
 	/* safe to write it, main thread is waiting for us */
 	thr->err = err;
 
-	return NULL;
+	return 0;
 }
 
 
@@ -747,10 +746,10 @@ int test_multithread(void)
 		threadv[i].test = &tests[ti];
 		threadv[i].err = -1;           /* error not set */
 
-		err = pthread_create(&threadv[i].tid, NULL,
+		err = thrd_create(&threadv[i].tid,
 				     thread_handler, (void *)&threadv[i]);
 		if (err) {
-			DEBUG_WARNING("pthread_create failed (%m)\n", err);
+			DEBUG_WARNING("thread_create failed (%m)\n", err);
 			break;
 		}
 
@@ -759,7 +758,7 @@ int test_multithread(void)
 
 	for (i=0; i<ARRAY_SIZE(threadv); i++) {
 
-		pthread_join(threadv[i].tid, NULL);
+		thrd_join(threadv[i].tid, NULL);
 	}
 
 	for (i=0; i<ARRAY_SIZE(threadv); i++) {
@@ -778,7 +777,6 @@ int test_multithread(void)
 
 	return err;
 }
-#endif
 
 
 void test_listcases(void)

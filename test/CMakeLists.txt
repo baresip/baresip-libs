@@ -100,6 +100,7 @@ set(SRCS
   src/mbuf.c
   src/md5.c
   src/mem.c
+  src/mock/dnssrv.c
   src/mock/fuzz.c
   src/mock/nat.c
   src/mock/pf.c
@@ -129,6 +130,7 @@ set(SRCS
   src/tcp.c
   src/telev.c
   src/test.c
+  src/thread.c
   src/tmr.c
   src/trace.c
   src/trice.c
@@ -156,4 +158,6 @@ endif()
 #
 
 add_executable(${PROJECT_NAME} ${SRCS})
-target_link_libraries(${PROJECT_NAME} rem re -lz -lpthread -lm)
+target_link_libraries(${PROJECT_NAME}
+    PRIVATE ${OPENSSL_LIBRARIES} rem re -lz -lpthread -lm)
+target_include_directories(${PROJECT_NAME} PRIVATE ${OPENSSL_INCLUDE_DIR})

@@ -169,6 +169,7 @@ int test_bfcp_bin(void);
 int test_conf(void);
 int test_crc32(void);
 int test_dns_hdr(void);
+int test_dns_integration(void);
 int test_dns_rr(void);
 int test_dns_dname(void);
 int test_dsp(void);
@@ -297,6 +298,7 @@ int test_sys_fs_isfile(void);
 int test_sys_fs_fopen(void);
 int test_tcp(void);
 int test_telev(void);
+int test_thread(void);
 int test_tmr_jiffies(void);
 int test_tmr_jiffies_usec(void);
 int test_try_into(void);
@@ -324,6 +326,8 @@ int test_tls_selfsigned(void);
 int test_tls_certificate(void);
 int test_tls_false_cafile_path(void);
 int test_tls_cli_conn_change_cert(void);
+int test_tls_session_reuse_tls_v12(void);
+int test_tls_session_reuse(void);
 #endif
 
 #ifdef USE_TLS
@@ -488,3 +492,25 @@ int sip_server_uri(struct sip_server *srv, char *uri, size_t sz,
 struct fuzz;
 
 int fuzz_register_tcpconn(struct fuzz **fuzzp, struct tcp_conn *tc);
+
+
+/*
+ * Mock DNS-Server
+ */
+
+struct dns_server {
+	struct udp_sock *us;
+	struct sa addr;
+	struct list rrl;
+	bool rotate;
+};
+
+int dns_server_alloc(struct dns_server **srvp, bool rotate);
+int dns_server_add_a(struct dns_server *srv, const char *name, uint32_t addr,
+		     int64_t ttl);
+int dns_server_add_aaaa(struct dns_server *srv, const char *name,
+			const uint8_t *addr);
+int dns_server_add_srv(struct dns_server *srv, const char *name,
+		       uint16_t pri, uint16_t weight, uint16_t port,
+		       const char *target);
+void dns_server_flush(struct dns_server *srv);

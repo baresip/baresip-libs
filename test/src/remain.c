@@ -6,9 +6,6 @@
 
 #include <string.h>
 #include <re.h>
-#ifdef HAVE_PTHREAD
-#include <pthread.h>
-#endif
 #include "test.h"
 
 
@@ -17,12 +14,9 @@
 #include <re_dbg.h>
 
 
-#ifdef HAVE_PTHREAD
-
-
 struct data {
-	pthread_t tid;
-	pthread_mutex_t mutex;
+	thrd_t tid;
+	mtx_t mutex;
 	bool thread_started;
 	bool thread_exited;
 	unsigned tmr_called;
@@ -35,10 +29,10 @@ static void tmr_handler(void *arg)
 	struct data *data = arg;
 	int err = 0;
 
-	pthread_mutex_lock(&data->mutex);
+	mtx_lock(&data->mutex);
 
 	/* verify that timer is called from the new thread */
-	TEST_ASSERT(0 != pthread_equal(data->tid, pthread_self()));
+	TEST_ASSERT(0 != thrd_equal(data->tid, thrd_current()));
 
 	++data->tmr_called;
 
@@ -46,13 +40,13 @@ static void tmr_handler(void *arg)
 	if (err)
 		data->err = err;
 
-	pthread_mutex_unlock(&data->mutex);
+	mtx_unlock(&data->mutex);
 
 	re_cancel();
 }
 
 
-static void *thread_handler(void *arg)
+static int thread_handler(void *arg)
 {
 	struct data *data = arg;
 	struct tmr tmr;
@@ -66,17 +60,25 @@ static void *thread_handler(void *arg)
 	if (err) {
 		DEBUG_WARNING("re thread init: %m\n", err);
 		data->err = err;
-		return NULL;
+		return 0;
 	}
+
+#ifndef WIN32
+	err = fd_setsize(-1);
+	TEST_ERR(err);
+#endif
+	err = re_thread_init();
+	TEST_EQUALS(EALREADY, err);
 
 	tmr_start(&tmr, 1, tmr_handler, data);
 
 	/* run the main loop now */
 	err = re_main(NULL);
+
+out:
 	if (err) {
 		data->err = err;
 	}
-
 	tmr_cancel(&tmr);
 
 	/* cleanup */
@@ -85,7 +87,7 @@ static void *thread_handler(void *arg)
 
 	data->thread_exited = true;
 
-	return NULL;
+	return 0;
 }
 
 
@@ -96,29 +98,29 @@ static int test_remain_thread(void)
 
 	memset(&data, 0, sizeof(data));
 
-	pthread_mutex_init(&data.mutex, NULL);
+	mtx_init(&data.mutex, mtx_plain);
 
-	err = pthread_create(&data.tid, NULL, thread_handler, &data);
+	err = thrd_create(&data.tid, thread_handler, &data);
 	if (err)
 		return err;
 
 	/* wait for timer to be called */
 	for (i=0; i<500; i++) {
 
-		pthread_mutex_lock(&data.mutex);
+		mtx_lock(&data.mutex);
 
 		if (data.tmr_called || data.err) {
-			pthread_mutex_unlock(&data.mutex);
+			mtx_unlock(&data.mutex);
 			break;
 		}
 
-		pthread_mutex_unlock(&data.mutex);
+		mtx_unlock(&data.mutex);
 
 		sys_msleep(1);
 	}
 
 	/* wait for thread to end */
-	pthread_join(data.tid, NULL);
+	thrd_join(data.tid, NULL);
 
 	if (data.err)
 		return data.err;
@@ -133,18 +135,13 @@ static int test_remain_thread(void)
 }
 
 
-#endif
-
-
 int test_remain(void)
 {
 	int err = 0;
 
-#ifdef HAVE_PTHREAD
 	err = test_remain_thread();
 	if (err)
 		return err;
-#endif
 
 	return err;
 }

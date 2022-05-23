@@ -65,6 +65,7 @@ SRCS	+= vid.c
 SRCS	+= vidconv.c
 SRCS	+= websock.c
 SRCS	+= trace.c
+SRCS	+= thread.c
 
 ifneq ($(USE_TLS),)
 SRCS	+= tls.c
@@ -82,3 +83,4 @@ SRCS	+= mock/turnsrv.c
 SRCS	+= mock/nat.c
 SRCS	+= mock/tcpsrv.c
 SRCS	+= mock/fuzz.c
+SRCS	+= mock/dnssrv.c
