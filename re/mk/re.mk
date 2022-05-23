@@ -152,7 +152,6 @@ CFLAGS	+= -Wshadow
 CFLAGS	+= -Waggregate-return
 CFLAGS	+= -Wcast-align
 CFLAGS	+= -Wold-style-definition
-CFLAGS	+= -Wdeclaration-after-statement
 CFLAGS	+= -Wvla # Avoid insecure variable-length arrays
 ifeq ($(CC_NAME), clang)
 CFLAGS	+= -Wshorten-64-to-32
@@ -500,6 +499,10 @@ CFLAGS  += -DUSE_ZLIB
 LIBS    += -lz
 endif
 
+HAVE_THREADS := $(shell $(call CC_TEST,threads.h))
+ifneq ($(HAVE_THREADS),)
+CFLAGS  += -DHAVE_THREADS
+endif
 
 HAVE_PTHREAD := $(shell $(call CC_TEST,pthread.h))
 ifneq ($(HAVE_PTHREAD),)

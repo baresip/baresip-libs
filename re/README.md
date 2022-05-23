@@ -140,13 +140,14 @@ Patches can sent via Github
 | sys      | stable   | System information                             |
 | tcp      | stable   | TCP transport                                  |
 | telev    | stable   | Telephony Events (RFC 4733)                    |
+| thread   | testing  | C11 threads (with pthread and win32 emulation) |
 | tls      | stable   | Transport Layer Security                       |
 | tmr      | stable   | Timer handling                                 |
 | turn     | stable   | Obtaining Relay Addresses from STUN (TURN)     |
 | udp      | stable   | UDP transport                                  |
 | uri      | stable   | Generic URI library                            |
 | websock  | stable   | WebSocket Client and Server                    |
-| trace    | development | Trace Helpers JSON traces (chrome://tracing)|
+| trace    | testing  | Trace Helpers JSON traces (chrome://tracing)   |
 
 legend:
 * *stable* - code complete; stable code and stable API
@@ -252,11 +253,9 @@ legend:
 
 ### Supported versions of OpenSSL
 
-* OpenSSL version 1.0.2
 * OpenSSL version 1.1.0
 * OpenSSL version 1.1.1
 * OpenSSL version 3.0.x
-* LibreSSL version 2.x
 * LibreSSL version 3.x
 
 

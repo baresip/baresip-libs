@@ -12,7 +12,7 @@
 
 cmake_minimum_required(VERSION 3.7)
 
-project(re VERSION 2.2.2 LANGUAGES C)
+project(re VERSION 2.3.0 LANGUAGES C)
 
 # Pre-release identifier, comment out on a release
 # Increment for breaking changes (dev2, dev3...)
@@ -33,8 +33,9 @@ endif()
 #
 include(GNUInstallDirs)
 include(CheckIncludeFile)
+include(CheckFunctionExists)
 find_package(Backtrace)
-find_package(Threads)
+find_package(Threads REQUIRED)
 find_package(OpenSSL)
 
 check_symbol_exists("arc4random" "stdlib.h" HAVE_ARC4RANDOM)
@@ -62,10 +63,17 @@ if(MSVC)
   add_compile_options("/W3")
 else()
   add_compile_options(
-    -Wall -Wextra -Wmissing-declarations -Wmissing-prototypes
-    -Wstrict-prototypes -Wbad-function-cast -Wnested-externs
-    -Wshadow -Waggregate-return -Wcast-align -Wold-style-definition
-    -Wdeclaration-after-statement -Wvla
+    -Wall
+    -Wbad-function-cast
+    -Wcast-align
+    -Wextra
+    -Wmissing-declarations
+    -Wmissing-prototypes
+    -Wnested-externs
+    -Wold-style-definition
+    -Wshadow -Waggregate-return
+    -Wstrict-prototypes
+    -Wvla
   )
 endif()
 
@@ -84,6 +92,11 @@ if(Backtrace_FOUND)
   add_definitions(-DHAVE_EXECINFO)
 else()
   set(Backtrace_LIBRARIES)
+endif()
+
+check_function_exists(thrd_create HAVE_THREADS)
+if(HAVE_THREADS)
+  add_definitions(-DHAVE_THREADS)
 endif()
 
 if(CMAKE_USE_PTHREADS_INIT)
@@ -176,6 +189,7 @@ endif()
 set(HEADERS
   include/re_aes.h
   include/re_atomic.h
+  include/re_av1.h
   include/re_base64.h
   include/re_bfcp.h
   include/re_bitv.h
@@ -187,6 +201,8 @@ set(HEADERS
   include/re_dns.h
   include/re_fmt.h
   include/re.h
+  include/re_h264.h
+  include/re_h265.h
   include/re_hash.h
   include/re_hmac.h
   include/re_httpauth.h
@@ -233,6 +249,9 @@ set(HEADERS
 
 set(SRCS
 
+  src/av1/obu.c
+  src/av1/pkt.c
+
   src/base64/b64.c
 
   src/btrace/btrace.c
@@ -261,6 +280,12 @@ set(SRCS
   src/fmt/str_error.c
   src/fmt/time.c
   src/fmt/unicode.c
+
+  src/h264/getbit.c
+  src/h264/nal.c
+  src/h264/sps.c
+
+  src/h265/nal.c
 
   src/hash/func.c
   src/hash/hash.c
@@ -382,6 +407,8 @@ set(SRCS
   src/tcp/tcp_high.c
 
   src/telev/telev.c
+
+  src/thread/thread.c
 
   src/tmr/tmr.c
 
@@ -525,12 +552,23 @@ if(CMAKE_USE_WIN32_THREADS_INIT)
   list(APPEND SRCS
     src/lock/win32/lock.c
   )
-elseif(HAVE_PTHREAD)
+else()
   list(APPEND SRCS
     src/lock/lock.c
   )
 endif()
 
+if(HAVE_THREADS)
+  #Do nothing
+elseif(CMAKE_USE_WIN32_THREADS_INIT)
+  list(APPEND SRCS
+    src/thread/win32.c
+  )
+else()
+  list(APPEND SRCS
+    src/thread/posix.c
+  )
+endif()
 
 if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
   list(APPEND SRCS
@@ -540,7 +578,6 @@ if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
   list(APPEND SRCS
     src/net/linux/rt.c
-    src/main/epoll.c
   )
 elseif(${CMAKE_SYSTEM_NAME} MATCHES "Android")
   list(APPEND SRCS

@@ -6,17 +6,13 @@
 #include <ctype.h>
 #include <stdlib.h>
 #include <string.h>
-#ifdef HAVE_PTHREAD
-#include <pthread.h>
-#elif defined (WIN32)
-#include <windows.h>
-#endif
 #include <re_types.h>
 #include <re_list.h>
 #include <re_fmt.h>
 #include <re_mbuf.h>
 #include <re_mem.h>
 #include <re_btrace.h>
+#include <re_thread.h>
 
 
 #define DEBUG_MODULE "mem"
@@ -48,62 +44,28 @@ static const uint32_t mem_magic = 0xe7fb9ac4;
 static ssize_t threshold = -1;  /**< Memory threshold, disabled by default */
 
 static struct memstat memstat = {
-	0,0,0,0,~0,0
+	0,0,0,0
 };
 
-#ifdef HAVE_PTHREAD
+static once_flag flag = ONCE_FLAG_INIT;
+static mtx_t mtx;
 
-static pthread_mutex_t mem_mutex = PTHREAD_MUTEX_INITIALIZER;
+static void mem_lock_init(void)
+{
+	mtx_init(&mtx, mtx_plain);
+}
 
 static inline void mem_lock(void)
 {
-	pthread_mutex_lock(&mem_mutex);
-}
+	call_once(&flag, mem_lock_init);
 
+	mtx_lock(&mtx);
+}
 
 static inline void mem_unlock(void)
 {
-	pthread_mutex_unlock(&mem_mutex);
+	mtx_unlock(&mtx);
 }
-
-#elif defined (WIN32)
-
-INIT_ONCE g_initMemLockOnce = INIT_ONCE_STATIC_INIT;
-CRITICAL_SECTION g_memLock;
-
-
-static BOOL CALLBACK InitHandleFunction(PINIT_ONCE initOnce,
-					PVOID parameter,
-					PVOID *lpContext)
-{
-	(void)initOnce;
-	(void)parameter;
-
-	InitializeCriticalSection((LPCRITICAL_SECTION)lpContext);
-
-	return TRUE;
-}
-
-
-static inline void mem_lock(void)
-{
-	InitOnceExecuteOnce(&g_initMemLockOnce, InitHandleFunction,
-			    NULL, (PVOID*)&g_memLock);
-	EnterCriticalSection(&g_memLock);
-}
-
-
-static inline void mem_unlock(void)
-{
-	LeaveCriticalSection(&g_memLock);
-}
-
-#else
-
-#define mem_lock()    /**< Stub */
-#define mem_unlock()  /**< Stub */
-
-#endif
 
 /** Update statistics for mem_zalloc() */
 #define STAT_ALLOC(m, size) \
@@ -112,8 +74,6 @@ static inline void mem_unlock(void)
 	memstat.bytes_peak = max(memstat.bytes_cur, memstat.bytes_peak); \
 	++memstat.blocks_cur; \
 	memstat.blocks_peak = max(memstat.blocks_cur, memstat.blocks_peak); \
-	memstat.size_min = min(memstat.size_min, size);	\
-	memstat.size_max = max(memstat.size_max, size);	\
 	mem_unlock(); \
 	(m)->size = (size); \
 	(m)->magic = mem_magic;
@@ -123,8 +83,6 @@ static inline void mem_unlock(void)
 	mem_lock(); \
 	memstat.bytes_cur += ((size) - (m)->size); \
 	memstat.bytes_peak = max(memstat.bytes_cur, memstat.bytes_peak); \
-	memstat.size_min = min(memstat.size_min, size);	\
-	memstat.size_max = max(memstat.size_max, size); \
 	mem_unlock(); \
 	(m)->size = (size)
 
@@ -514,8 +472,6 @@ int mem_status(struct re_printf *pf, void *unused)
 			  stat.blocks_peak, stat.bytes_peak,
 			  stat.bytes_peak
 			  +(stat.blocks_peak*sizeof(struct mem)));
-	err |= re_hprintf(pf, " Block size: min=%u, max=%u\n",
-			  stat.size_min, stat.size_max);
 	err |= re_hprintf(pf, " Total %u blocks allocated\n", c);
 
 	return err;

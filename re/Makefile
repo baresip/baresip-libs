@@ -6,15 +6,15 @@
 
 # Main version number
 VER_MAJOR := 2
-VER_MINOR := 2
-VER_PATCH := 2
+VER_MINOR := 3
+VER_PATCH := 0
 
 # Development version, comment out on a release
 # Increment for breaking changes (dev2, dev3...)
 # VER_PRE   := dev
 
 # bump Major if ABI breaks
-ABI_MAJOR := 4
+ABI_MAJOR := 5
 ABI_AGE   := $(VER_MINOR)
 ABI_REV   := $(VER_PATCH)
 
@@ -43,7 +43,7 @@ MODULES += dns
 MODULES += md5 crc32 sha hmac base64
 MODULES += udp sa net tcp tls
 MODULES += list mbuf hash
-MODULES += fmt tmr trace btrace main mem dbg sys lock mqueue
+MODULES += fmt tmr trace btrace main mem dbg sys thread lock mqueue
 MODULES += mod conf
 MODULES += bfcp
 MODULES += aes srtp
@@ -53,6 +53,9 @@ MODULES += rtmp
 MODULES += shim
 MODULES += trice
 MODULES += pcp
+MODULES += av1
+MODULES += h264
+MODULES += h265
 
 INSTALL := install
 ifeq ($(DESTDIR),)

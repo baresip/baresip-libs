@@ -5,18 +5,12 @@
  */
 
 
-#ifdef HAVE_EPOLL
-bool epoll_check(void);
-#endif
-
-
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 #ifdef USE_OPENSSL
 int  openssl_init(void);
-void openssl_close(void);
 #endif
 
 #ifdef __cplusplus
