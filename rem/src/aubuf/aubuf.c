@@ -24,6 +24,7 @@ struct aubuf {
 	size_t cur_sz;
 	size_t max_sz;
 	bool filling;
+	bool started;
 	uint64_t ts;
 
 #if AUBUF_DEBUG
@@ -213,6 +214,7 @@ static bool frame_less_equal(struct le *le1, struct le *le2, void *arg)
 int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb, struct auframe *af)
 {
 	struct frame *f;
+	size_t max_sz;
 
 	if (!ab || !mb)
 		return EINVAL;
@@ -230,11 +232,14 @@ int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb, struct auframe *af)
 	list_insert_sorted(&ab->afl, frame_less_equal, NULL, &f->le, f);
 	ab->cur_sz += mbuf_get_left(mb);
 
-	if (ab->max_sz && ab->cur_sz > ab->max_sz) {
+	max_sz = ab->started ? ab->max_sz : ab->wish_sz + 1;
+	if (ab->max_sz && ab->cur_sz > max_sz) {
 #if AUBUF_DEBUG
-		++ab->stats.or;
-		(void)re_printf("aubuf: %p overrun (cur=%zu)\n", ab,
-				ab->cur_sz);
+		if (ab->started) {
+			++ab->stats.or;
+			(void)re_printf("aubuf: %p overrun (cur=%zu/%zu)\n",
+					ab, ab->cur_sz, ab->max_sz);
+		}
 #endif
 		f = list_ledata(ab->afl.head);
 		if (f) {
@@ -335,6 +340,9 @@ void aubuf_read_auframe(struct aubuf *ab, struct auframe *af)
 			plot_underrun(ab->ajb);
 		}
 #endif
+		if (!ab->filling)
+			ajb_reset(ab->ajb);
+
 		filling = ab->filling;
 		ab->filling = true;
 		memset(af->sampv, 0, sz);
@@ -342,6 +350,7 @@ void aubuf_read_auframe(struct aubuf *ab, struct auframe *af)
 			goto out;
 	}
 
+	ab->started = true;
 	read_auframe(ab, af);
 	if (as == AJB_HIGH) {
 #if AUBUF_DEBUG
@@ -482,11 +491,17 @@ size_t aubuf_cur_size(const struct aubuf *ab)
  */
 void aubuf_sort_auframe(struct aubuf *ab)
 {
+	if (!ab)
+		return;
+
 	list_sort(&ab->afl, frame_less_equal, NULL);
 }
 
 
 void aubuf_drop_auframe(struct aubuf *ab, struct auframe *af)
 {
+	if (!ab)
+		return;
+
 	ajb_drop(ab->ajb, af);
 }

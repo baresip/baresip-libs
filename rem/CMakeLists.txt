@@ -11,7 +11,7 @@
 
 cmake_minimum_required(VERSION 3.7)
 
-project(rem VERSION 2.0.1 LANGUAGES C)
+project(rem VERSION 2.3.0 LANGUAGES C)
 
 ##############################################################################
 #
@@ -62,6 +62,7 @@ add_definitions(-DVERSION="${PROJECT_VERSION}")
 add_library(${PROJECT_NAME}
   src/aac/aac.c
   src/au/fmt.c
+  src/au/util.c
   src/aubuf/aubuf.c
   src/aubuf/ajb.c
   src/auconv/auconv.c
@@ -77,10 +78,6 @@ add_library(${PROJECT_NAME}
   src/fir/fir.c
   src/g711/g711.c
   src/goertzel/goertzel.c
-  src/h264/getbit.c
-  src/h264/nal.c
-  src/h264/sps.c
-  src/h265/nal.c
   src/vid/draw.c
   src/vid/fmt.c
   src/vid/frame.c

@@ -10,7 +10,6 @@
 #include <unistd.h>
 #endif
 #define __USE_UNIX98 1
-#include <pthread.h>
 #include <string.h>
 #include <re.h>
 #include <rem_vid.h>
@@ -19,15 +18,15 @@
 
 
 struct vidmix {
-	pthread_rwlock_t rwlock;
+	struct lock *rwlock;
 	struct list srcl;
 	bool initialized;
 };
 
 struct vidmix_source {
 	struct le le;
-	pthread_t thread;
-	pthread_mutex_t mutex;
+	thrd_t thread;
+	mtx_t mutex;
 	struct vidframe *frame_tx;
 	struct vidframe *frame_rx;
 	struct vidmix *mix;
@@ -72,7 +71,7 @@ static void destructor(void *arg)
 	struct vidmix *mix = arg;
 
 	if (mix->initialized)
-		(void)pthread_rwlock_destroy(&mix->rwlock);
+		mix->rwlock = mem_deref(mix->rwlock);
 }
 
 
@@ -83,10 +82,10 @@ static void source_destructor(void *arg)
 	vidmix_source_stop(src);
 
 	if (src->le.list) {
-		pthread_rwlock_wrlock(&src->mix->rwlock);
+		lock_write_get(src->mix->rwlock);
 		list_unlink(&src->le);
 		clear_all(src->mix);
-		pthread_rwlock_unlock(&src->mix->rwlock);
+		lock_rel(src->mix->rwlock);
 	}
 
 	mem_deref(src->frame_tx);
@@ -183,13 +182,13 @@ static inline unsigned calc_rows(unsigned n)
 }
 
 
-static void *vidmix_thread(void *arg)
+static int vidmix_thread(void *arg)
 {
 	struct vidmix_source *src = arg;
 	struct vidmix *mix = src->mix;
 	uint64_t ts = tmr_jiffies();
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 
 	while (src->run) {
 
@@ -197,9 +196,9 @@ static void *vidmix_thread(void *arg)
 		struct le *le;
 		uint64_t now;
 
-		pthread_mutex_unlock(&src->mutex);
+		mtx_unlock(&src->mutex);
 		sys_usleep(4000);
-		pthread_mutex_lock(&src->mutex);
+		mtx_lock(&src->mutex);
 
 		now = tmr_jiffies();
 
@@ -211,7 +210,7 @@ static void *vidmix_thread(void *arg)
 			continue;
 		}
 
-		pthread_rwlock_rdlock(&mix->rwlock);
+		lock_read_get(mix->rwlock);
 
 		if (src->clear) {
 			clear_frame(src->frame_tx);
@@ -257,42 +256,42 @@ static void *vidmix_thread(void *arg)
 				++idx;
 		}
 
-		pthread_rwlock_unlock(&mix->rwlock);
+		lock_rel(mix->rwlock);
 
 		src->fh((uint32_t)ts * 90, src->frame_tx, src->arg);
 
 		ts += src->fint;
 	}
 
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 
-	return NULL;
+	return 0;
 }
 
 
-static void *content_thread(void *arg)
+static int content_thread(void *arg)
 {
 	struct vidmix_source *src = arg;
 	struct vidmix *mix = src->mix;
 	uint64_t ts = tmr_jiffies();
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 
 	while (src->run) {
 
 		struct le *le;
 		uint64_t now;
 
-		pthread_mutex_unlock(&src->mutex);
+		mtx_unlock(&src->mutex);
 		sys_usleep(4000);
-		pthread_mutex_lock(&src->mutex);
+		mtx_lock(&src->mutex);
 
 		now = tmr_jiffies();
 
 		if (ts > now)
 			continue;
 
-		pthread_rwlock_rdlock(&mix->rwlock);
+		lock_read_get(mix->rwlock);
 
 		for (le=mix->srcl.head; le; le=le->next) {
 
@@ -305,14 +304,14 @@ static void *content_thread(void *arg)
 			break;
 		}
 
-		pthread_rwlock_unlock(&mix->rwlock);
+		lock_rel(mix->rwlock);
 
 		ts += src->fint;
 	}
 
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 
-	return NULL;
+	return 0;
 }
 
 
@@ -325,7 +324,6 @@ static void *content_thread(void *arg)
  */
 int vidmix_alloc(struct vidmix **mixp)
 {
-	pthread_rwlockattr_t attr;
 	struct vidmix *mix;
 	int err;
 
@@ -336,28 +334,13 @@ int vidmix_alloc(struct vidmix **mixp)
 	if (!mix)
 		return ENOMEM;
 
-	err = pthread_rwlockattr_init(&attr);
-	if (err) {
-		mem_deref(mix);
-		return err;
-	}
-
-#if defined(LINUX) && defined(__GLIBC__)
-	err = pthread_rwlockattr_setkind_np(&attr,
-				 PTHREAD_RWLOCK_PREFER_WRITER_NONRECURSIVE_NP);
-	if (err)
-		goto out;
-#endif
-
-	err = pthread_rwlock_init(&mix->rwlock, &attr);
+	err = lock_alloc(&mix->rwlock);
 	if (err)
 		goto out;
 
 	mix->initialized = true;
 
  out:
-	(void)pthread_rwlockattr_destroy(&attr);
-
 	if (err)
 		mem_deref(mix);
 	else
@@ -400,7 +383,7 @@ int vidmix_source_alloc(struct vidmix_source **srcp, struct vidmix *mix,
 	src->fh      = fh;
 	src->arg     = arg;
 
-	err = pthread_mutex_init(&src->mutex, NULL);
+	err = mtx_init(&src->mutex, mtx_plain);
 	if (err)
 		goto out;
 
@@ -478,7 +461,7 @@ void vidmix_source_enable(struct vidmix_source *src, bool enable)
 	if (!src->le.list && !enable)
 		return;
 
-	pthread_rwlock_wrlock(&src->mix->rwlock);
+	lock_write_get(src->mix->rwlock);
 
 	if (enable) {
 		if (src->frame_rx)
@@ -492,7 +475,7 @@ void vidmix_source_enable(struct vidmix_source *src, bool enable)
 
 	clear_all(src->mix);
 
-	pthread_rwlock_unlock(&src->mix->rwlock);
+	lock_rel(src->mix->rwlock);
 }
 
 
@@ -515,7 +498,7 @@ int vidmix_source_start(struct vidmix_source *src)
 
 	src->run = true;
 
-	err = pthread_create(&src->thread, NULL,
+	err = thrd_create(&src->thread,
 			     src->content ? content_thread : vidmix_thread,
 			     src);
 	if (err) {
@@ -537,10 +520,10 @@ void vidmix_source_stop(struct vidmix_source *src)
 		return;
 
 	if (src->run) {
-		pthread_mutex_lock(&src->mutex);
+		mtx_lock(&src->mutex);
 		src->run = false;
-		pthread_mutex_unlock(&src->mutex);
-		pthread_join(src->thread, NULL);
+		mtx_unlock(&src->mutex);
+		thrd_join(src->thread, NULL);
 	}
 }
 
@@ -570,10 +553,10 @@ int vidmix_source_set_size(struct vidmix_source *src, const struct vidsz *sz)
 
 	clear_frame(frame);
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 	mem_deref(src->frame_tx);
 	src->frame_tx = frame;
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 
 	return 0;
 }
@@ -590,9 +573,9 @@ void vidmix_source_set_rate(struct vidmix_source *src, unsigned fps)
 	if (!src || !fps)
 		return;
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 	src->fint = 1000/fps;
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 }
 
 
@@ -607,10 +590,10 @@ void vidmix_source_set_content_hide(struct vidmix_source *src, bool hide)
 	if (!src)
 		return;
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 	src->content_hide = hide;
 	src->clear = true;
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 }
 
 
@@ -624,10 +607,10 @@ void vidmix_source_toggle_selfview(struct vidmix_source *src)
 	if (!src)
 		return;
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 	src->selfview = !src->selfview;
 	src->clear = true;
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 }
 
 
@@ -645,11 +628,11 @@ void vidmix_source_set_focus(struct vidmix_source *src,
 	if (!src)
 		return;
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 	src->focus_full = focus_full;
 	src->focus = (void *)focus_src;
 	src->clear = true;
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 }
 
 
@@ -672,7 +655,7 @@ void vidmix_source_set_focus_idx(struct vidmix_source *src, unsigned pidx)
 		struct le *le;
 		unsigned i;
 
-		pthread_rwlock_rdlock(&src->mix->rwlock);
+		lock_read_get(src->mix->rwlock);
 
 		for (le=src->mix->srcl.head, i=1; le; le=le->next) {
 
@@ -690,17 +673,17 @@ void vidmix_source_set_focus_idx(struct vidmix_source *src, unsigned pidx)
 			}
 		}
 
-		pthread_rwlock_unlock(&src->mix->rwlock);
+		lock_rel(src->mix->rwlock);
 	}
 
 	if (focus && focus == src->focus)
 		focus_full = !src->focus_full;
 
-	pthread_mutex_lock(&src->mutex);
+	mtx_lock(&src->mutex);
 	src->focus_full = focus_full;
 	src->focus = focus;
 	src->clear = true;
-	pthread_mutex_unlock(&src->mutex);
+	mtx_unlock(&src->mutex);
 }
 
 
@@ -724,17 +707,17 @@ void vidmix_source_put(struct vidmix_source *src, const struct vidframe *frame)
 		if (err)
 			return;
 
-		pthread_rwlock_wrlock(&src->mix->rwlock);
+		lock_write_get(src->mix->rwlock);
 
 		mem_deref(src->frame_rx);
 		src->frame_rx = frm;
 
 		clear_all(src->mix);
 
-		pthread_rwlock_unlock(&src->mix->rwlock);
+		lock_rel(src->mix->rwlock);
 	}
 
-	pthread_rwlock_wrlock(&src->mix->rwlock);
+	lock_write_get(src->mix->rwlock);
 	vidframe_copy(src->frame_rx, frame);
-	pthread_rwlock_unlock(&src->mix->rwlock);
+	lock_rel(src->mix->rwlock);
 }
