@@ -8,6 +8,9 @@ cmake_minimum_required(VERSION 3.7)
 
 project(baresip-libs)
 
+set(RE_LIBRARY re)
+set(REM_LIBRARY rem)
+
 add_subdirectory(re)
 add_subdirectory(rem)
 add_subdirectory(test)
