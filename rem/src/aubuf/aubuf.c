@@ -211,7 +211,8 @@ static bool frame_less_equal(struct le *le1, struct le *le2, void *arg)
  *
  * @return 0 for success, otherwise error code
  */
-int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb, struct auframe *af)
+int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb,
+			 const struct auframe *af)
 {
 	struct frame *f;
 	size_t max_sz;
@@ -265,11 +266,12 @@ int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb, struct auframe *af)
  *
  * @return 0 for success, otherwise error code
  */
-int aubuf_write_auframe(struct aubuf *ab, struct auframe *af)
+int aubuf_write_auframe(struct aubuf *ab, const struct auframe *af)
 {
 	struct mbuf *mb;
 	size_t sz;
 	size_t sample_size;
+	bool ajb;
 	int err;
 
 	if (!ab || !af)
@@ -292,9 +294,10 @@ int aubuf_write_auframe(struct aubuf *ab, struct auframe *af)
 
 	lock_write_get(ab->lock);
 	mem_deref(mb);
+	ajb = !ab->filling && ab->ajb;
 	lock_rel(ab->lock);
 
-	if (!ab->filling && ab->ajb)
+	if (ajb)
 		ajb_calc(ab->ajb, af, ab->cur_sz);
 
 	return err;
@@ -498,7 +501,7 @@ void aubuf_sort_auframe(struct aubuf *ab)
 }
 
 
-void aubuf_drop_auframe(struct aubuf *ab, struct auframe *af)
+void aubuf_drop_auframe(struct aubuf *ab, const struct auframe *af)
 {
 	if (!ab)
 		return;
