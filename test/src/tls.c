@@ -368,24 +368,21 @@ int test_tls_ec(void)
 int test_tls_selfsigned(void)
 {
 	struct tls *tls = NULL;
-	uint8_t fp[20];
+	uint8_t fp[32];
 	int err;
 
 	err = tls_alloc(&tls, TLS_METHOD_SSLV23, NULL, NULL);
 	if (err)
 		goto out;
 
-	err = tls_set_selfsigned_rsa(tls, "re@test", 2048);
-	TEST_ERR(err);
-
-	/* verify fingerprint of the self-signed certificate */
-	err = tls_fingerprint(tls, TLS_FINGERPRINT_SHA1, fp, sizeof(fp));
-	TEST_ERR(err);
-
 	err = tls_set_selfsigned_ec(tls, "re_ec@test", "unknown");
 	TEST_EQUALS(err, ENOTSUP);
 
 	err = tls_set_selfsigned_ec(tls, "re_ec@test", "prime256v1");
+	TEST_ERR(err);
+
+	/* verify fingerprint of the self-signed certificate */
+	err = tls_fingerprint(tls, TLS_FINGERPRINT_SHA256, fp, sizeof(fp));
 	TEST_ERR(err);
 
  out:
@@ -397,10 +394,12 @@ int test_tls_selfsigned(void)
 int test_tls_certificate(void)
 {
 	struct tls *tls = NULL;
-	static const uint8_t test_fingerprint[20] =
-		"\xAE\xDA\x8A\xEC\xE5\xF6\x72\x1A\x07\xFE"
-		"\x4B\xA9\xF0\x1B\x71\x67\xA5\xC9\xBB\x48";
-	uint8_t fp[20];
+	static const uint8_t test_fingerprint[32] =
+		"\x50\x5d\x95\x2b\xef\x5b\x6f\x7f"
+		"\x2b\x4a\xa8\x1b\xdd\xe1\x99\xfd"
+		"\x4e\xb5\xc1\x04\xe7\x67\xa7\x48"
+		"\xb1\xf1\x66\x35\x98\xdc\x84\xc6";
+	uint8_t fp[32];
 	struct mbuf *mb = NULL;
 	int err;
 
@@ -422,7 +421,7 @@ int test_tls_certificate(void)
 	TEST_EQUALS(0, err);
 
 	/* verify fingerprint of the certificate */
-	err = tls_fingerprint(tls, TLS_FINGERPRINT_SHA1, fp, sizeof(fp));
+	err = tls_fingerprint(tls, TLS_FINGERPRINT_SHA256, fp, sizeof(fp));
 	TEST_ERR(err);
 
 	TEST_MEMCMP(test_fingerprint, sizeof(test_fingerprint),
@@ -480,8 +479,7 @@ int test_tls_cli_conn_change_cert(void)
 
 	memset(&tt, 0, sizeof(tt));
 
-
-	tt.keytype = TLS_KEYTYPE_RSA;
+	tt.keytype = TLS_KEYTYPE_EC;
 
 	err = sa_set_str(&srv, "127.0.0.1", 0);
 	if (err)
@@ -493,8 +491,8 @@ int test_tls_cli_conn_change_cert(void)
 
 	tls_set_verify_client(tt.tls);
 
-	err = tls_set_certificate(tt.tls, test_certificate_rsa,
-		strlen(test_certificate_rsa));
+	err = tls_set_certificate(tt.tls, test_certificate_ecdsa,
+		strlen(test_certificate_ecdsa));
 	if (err)
 		goto out;
 

@@ -13,12 +13,16 @@ cmake_minimum_required(VERSION 3.7)
 
 project(retest)
 
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
+
 
 ##############################################################################
 #
 # Module/Package Includes
 #
 
+find_package(RE REQUIRED)
+find_package(REM REQUIRED)
 find_package(OpenSSL)
 
 
@@ -36,8 +40,8 @@ include_directories(
   ../re/include
   ../rem/include
   /usr/local/include
-  /usr/local/include/re
-  /usr/local/include/rem
+  ${RE_INCLUDE_DIRS}
+  ${REM_INCLUDE_DIRS}
 )
 
 link_directories(/usr/local/lib)
@@ -45,10 +49,8 @@ link_directories(/usr/local/lib)
 add_definitions(
   -DHAVE_GETOPT
   -DHAVE_INET6
-  -DHAVE_PTHREAD
   -DHAVE_SIGNAL
   -DHAVE_UNISTD_H
-  -DUSE_ZLIB
 )
 
 if(USE_OPENSSL)
@@ -75,6 +77,7 @@ set(SRCS
   src/aubuf.c
   src/aulevel.c
   src/auresamp.c
+  src/av1.c
   src/base64.c
   src/bfcp.c
   src/conf.c
@@ -158,6 +161,9 @@ endif()
 #
 
 add_executable(${PROJECT_NAME} ${SRCS})
+set_property(TARGET ${PROJECT_NAME} PROPERTY ENABLE_EXPORTS 1)
+
 target_link_libraries(${PROJECT_NAME}
-    PRIVATE ${OPENSSL_LIBRARIES} rem re -lz -lpthread -lm)
+    PRIVATE ${REM_LIBRARIES} ${RE_LIBRARIES} ${OPENSSL_LIBRARIES}
+    -lz -lpthread -lm)
 target_include_directories(${PROJECT_NAME} PRIVATE ${OPENSSL_INCLUDE_DIR})
