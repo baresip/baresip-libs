@@ -634,7 +634,7 @@ static int read_file(char **pbuf, const char *path)
 	}
 	fseek(f, 0L, SEEK_SET);
 
-	buf = mem_alloc(s + 1, NULL);
+	buf = mem_zalloc(s + 1, NULL);
 	if (!buf) {
 		DEBUG_WARNING("Could not allocate cert file buffer\n");
 		fclose(f);
@@ -643,7 +643,6 @@ static int read_file(char **pbuf, const char *path)
 
 	n = fread(buf, 1, s, f);
 	fclose(f);
-	buf[s] = 0;
 	if (n < (size_t)s) {
 		mem_deref(buf);
 		return EIO;
@@ -859,6 +858,7 @@ int http_client_set_config(struct http_cli *cli, struct http_conf *conf)
 	dconf.tcp_hash_size = TCP_HASH_SIZE;
 	dconf.conn_timeout = conf->conn_timeout;
 	dconf.idle_timeout = conf->idle_timeout;
+	dconf.cache_ttl_max = 1800;
 
 	return dnsc_conf_set(cli->dnsc, &dconf);
 }

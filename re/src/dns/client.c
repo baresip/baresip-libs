@@ -223,11 +223,12 @@ static int reply_recv(struct dnsc *dnsc, struct mbuf *mb)
 	uint32_t nv[3];
 	struct dnsquery dq;
 	int err = 0;
-	int64_t ttl = dnsc->conf.cache_ttl_max;
+	int64_t ttl;
 
 	if (!dnsc || !mb)
 		return EINVAL;
 
+	ttl = dnsc->conf.cache_ttl_max;
 	dq.name = NULL;
 	dq.cache = false;
 
@@ -329,7 +330,7 @@ static int reply_recv(struct dnsc *dnsc, struct mbuf *mb)
 
 	/* Cache negative answer with SOA minimum value (RFC 2308) */
 	if (!dq.hdr.nans && dq.hdr.nauth) {
-		struct dnsrr *rr = list_ledata(list_head(&q->rrlv[1]));
+		const struct dnsrr *rr = list_ledata(list_head(&q->rrlv[1]));
 
 		if (!rr || rr->type != DNS_TYPE_SOA) {
 			mem_deref(q);
@@ -727,7 +728,7 @@ static void hdl_tmr_cache(void *arg)
 static bool query_cache_handler(struct dns_query *q)
 {
 	struct dnsquery dq;
-	struct dns_query *qc = NULL;
+	const struct dns_query *qc = NULL;
 	struct le *le;
 
 	dq.hdr	    = q->hdr;
