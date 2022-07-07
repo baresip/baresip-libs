@@ -32,10 +32,11 @@ enum {
 /** Adaptive jitter buffer statistics */
 struct ajb {
 	int32_t jitter;      /**< Jitter in [us]                  */
-	struct lock *lock;
+	mtx_t *lock;
 
-	uint64_t ts0;        /**< previous timestamp              */
-	uint64_t tr0;        /**< previous time of arrival        */
+	uint64_t ts;         /**< previous timestamp              */
+	uint64_t ts0;        /**< reference timestamp             */
+	uint64_t tr0;        /**< reference time of arrival       */
 	uint64_t tr00;       /**< arrival of first packet         */
 #if DEBUG_LEVEL >= 6
 	struct {
@@ -51,7 +52,6 @@ struct ajb {
 
 	enum ajb_state as;   /**< computed jitter buffer state    */
 
-	uint32_t ptime;      /**< Packet time [us]                */
 	int32_t avbuftime;   /**< average buffered time [us]      */
 	bool started;        /**< Started flag                    */
 	uint32_t bufmin;     /**< Minimum buffer time [us]        */
@@ -131,7 +131,9 @@ void plot_underrun(struct ajb *ajb)
 /**
  * Initializes the adaptive jitter buffer statistics
  *
- * @param ajb    Adaptive jitter buffer statistics
+ * @param silence Silence audio level
+ *
+ * @return ajb    Adaptive jitter buffer statistics
  */
 struct ajb *ajb_alloc(double silence)
 {
@@ -142,7 +144,7 @@ struct ajb *ajb_alloc(double silence)
 	if (!ajb)
 		return NULL;
 
-	err = lock_alloc(&ajb->lock);
+	err = mtx_alloc(&ajb->lock);
 	if (err)
 		goto out;
 
@@ -167,14 +169,15 @@ void ajb_reset(struct ajb *ajb)
 	if (!ajb)
 		return;
 
-	lock_write_get(ajb->lock);
+	mtx_lock(ajb->lock);
+	ajb->ts  = 0;
 	ajb->ts0 = 0;
 	ajb->tr0 = 0;
 
 	/* We start with wish size. */
 	ajb->started = false;
 	ajb->as = AJB_GOOD;
-	lock_rel(ajb->lock);
+	mtx_unlock(ajb->lock);
 }
 
 
@@ -192,23 +195,23 @@ void ajb_calc(struct ajb *ajb, const struct auframe *af, size_t cur_sz)
 	int32_t d;                         /**< Time shift in [us]           */
 	int32_t da;                        /**< Absolut time shift in [us]   */
 	int32_t s;                         /**< EMA coefficient              */
-	int64_t ts;                        /**< Time stamp                   */
+	uint64_t ts;                       /**< Time stamp                   */
+	uint64_t ds;                       /**< Time stamp duration          */
+	uint32_t ptime;                    /**< Packet time [us]             */
 	size_t sz;
-
 
 	if (!ajb || !af || !af->srate)
 		return;
 
-	lock_write_get(ajb->lock);
+	mtx_lock(ajb->lock);
 	sz = aufmt_sample_size(af->fmt);
-	ts = (int64_t) af->timestamp;
+	ts = af->timestamp;
 	tr = tmr_jiffies_usec();
 	if (!ajb->ts0)
 		goto out;
 
-	d = (int32_t) ( ((int64_t) tr - (int64_t) ajb->tr0) -
-			(ts - (int64_t) ajb->ts0) );
-
+	ds = ts - ajb->ts0;
+	d = (int32_t) (int64_t) ( (tr - ajb->tr0) - ds );
 	da = abs(d);
 
 	buftime = (uint32_t) (cur_sz * 1000 /
@@ -228,9 +231,6 @@ void ajb_calc(struct ajb *ajb, const struct auframe *af, size_t cur_sz)
 		ajb->started = true;
 	}
 
-	if (!ajb->ptime)
-		goto out;
-
 	s = da > ajb->jitter ? JITTER_UP_SPEED : 1;
 
 	ajb->jitter += (da - ajb->jitter) * s / JITTER_EMA_COEFF;
@@ -240,9 +240,14 @@ void ajb_calc(struct ajb *ajb, const struct auframe *af, size_t cur_sz)
 	bufmin = (uint32_t) ajb->jitter * BUFTIME_LO / 100;
 	bufmax = (uint32_t) ajb->jitter * BUFTIME_HI / 100;
 
-	bufmin = MAX(bufmin, ajb->ptime * 2 / 3);
-	bufmax = MAX(bufmax, bufmin + 7 * ajb->ptime / 6);
+	ptime = (uint32_t) (af->sampc * AUDIO_TIMEBASE / (af->srate * af->ch));
+	bufmin = MAX(bufmin, ptime * 2 / 3);
+	bufmax = MAX(bufmax, bufmin + 7 * ptime / 6);
 	ajb->bufmin = bufmin;
+
+	/* reset time base if a frame is missing */
+	if (ts - ajb->ts > ptime)
+		ajb->ts0 = 0;
 
 	if ((uint32_t) ajb->avbuftime < bufmin)
 		ajb->as = AJB_LOW;
@@ -259,42 +264,41 @@ void ajb_calc(struct ajb *ajb, const struct auframe *af, size_t cur_sz)
 	plot_ajb(ajb, tr / 1000);
 #endif
 out:
-	ajb->ts0 = ts;
-	ajb->tr0 = tr;
-	lock_rel(ajb->lock);
+	ajb->ts = ts;
+	if (!ajb->ts0) {
+		ajb->ts0 = ts;
+		ajb->tr0 = tr;
+	}
+	mtx_unlock(ajb->lock);
 }
 
 
-/**
- * This function is for reporting that the given audio frame is not appended.
- * Instead the timestamp is stored in `ts0` to avoid a jump of the computed
- * jitter value.
- * @param ajb     Adaptive jitter buffer statistics
- * @param af      Audio frame
- */
-void ajb_drop(struct ajb *ajb, const struct auframe *af)
+void ajb_set_ts0(struct ajb *ajb, uint64_t timestamp)
 {
-	if (!ajb || !af)
+	if (!ajb)
 		return;
 
-	lock_write_get(ajb->lock);
-	ajb->ts0 = af->timestamp;
-	lock_rel(ajb->lock);
+	mtx_lock(ajb->lock);
+	ajb->ts  = timestamp;
+	ajb->ts0 = timestamp;
+	ajb->tr0 = tmr_jiffies_usec();
+	mtx_unlock(ajb->lock);
 }
 
 
 enum ajb_state ajb_get(struct ajb *ajb, struct auframe *af)
 {
 	enum ajb_state as = AJB_GOOD;
+	uint32_t ptime;      /**< Packet time [us]                */
 
 	if (!ajb || !af || !af->srate || !af->sampc)
 		return AJB_GOOD;
 
-	lock_write_get(ajb->lock);
+	mtx_lock(ajb->lock);
 	ajb->af = *af;
 
 	/* ptime in [us] */
-	ajb->ptime = (uint32_t) (af->sampc * 1000 * 1000 / af->srate);
+	ptime = (uint32_t) (af->sampc * AUDIO_TIMEBASE / (af->srate * af->ch));
 	if (!ajb->avbuftime)
 		goto out;
 
@@ -305,7 +309,7 @@ enum ajb_state ajb_get(struct ajb *ajb, struct auframe *af)
 	as = ajb->as;
 	if (as == AJB_HIGH) {
 		/* early adjustment of avbuftime */
-		ajb->avbuftime -= ajb->ptime;
+		ajb->avbuftime -= ptime;
 		ajb->as = AJB_GOOD;
 #if DEBUG_LEVEL >= 6
 		ajb->plot.as = AJB_HIGH;
@@ -315,7 +319,7 @@ enum ajb_state ajb_get(struct ajb *ajb, struct auframe *af)
 	}
 	else if (as == AJB_LOW) {
 		/* early adjustment */
-		ajb->avbuftime += ajb->ptime;
+		ajb->avbuftime += ptime;
 		ajb->as = AJB_GOOD;
 #if DEBUG_LEVEL >= 6
 		ajb->plot.as = AJB_LOW;
@@ -325,7 +329,7 @@ enum ajb_state ajb_get(struct ajb *ajb, struct auframe *af)
 	}
 
 out:
-	lock_rel(ajb->lock);
+	mtx_unlock(ajb->lock);
 	return as;
 }
 
@@ -337,9 +341,9 @@ int32_t ajb_debug(const struct ajb *ajb)
 	if (!ajb)
 		return 0;
 
-	lock_write_get(ajb->lock);
+	mtx_lock(ajb->lock);
 	jitter = ajb->jitter;
-	lock_rel(ajb->lock);
+	mtx_unlock(ajb->lock);
 	re_printf("  ajb jitter: %d, ajb avbuftime: %d\n", jitter / 1000,
 		  ajb->avbuftime);
 

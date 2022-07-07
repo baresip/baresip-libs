@@ -13,17 +13,17 @@
 
 
 #define AUBUF_DEBUG 0
-#define AUDIO_TIMEBASE 1000000U
 
 
 /** Locked audio-buffer with almost zero-copy */
 struct aubuf {
 	struct list afl;
-	struct lock *lock;
+	mtx_t *lock;
 	size_t wish_sz;
 	size_t cur_sz;
 	size_t max_sz;
-	bool filling;
+	size_t fill_sz;         /**< To fill size                            */
+	size_t pkt_sz;        /**< Packet size                             */
 	bool started;
 	uint64_t ts;
 
@@ -125,13 +125,13 @@ int aubuf_alloc(struct aubuf **abp, size_t min_sz, size_t max_sz)
 	if (!ab)
 		return ENOMEM;
 
-	err = lock_alloc(&ab->lock);
+	err = mtx_alloc(&ab->lock);
 	if (err)
 		goto out;
 
 	ab->wish_sz = min_sz;
-	ab->max_sz = max_sz;
-	ab->filling = true;
+	ab->max_sz  = max_sz;
+	ab->fill_sz = min_sz;
 
  out:
 	if (err)
@@ -181,10 +181,10 @@ int aubuf_resize(struct aubuf *ab, size_t min_sz, size_t max_sz)
 	if (!ab || !min_sz)
 		return EINVAL;
 
-	lock_write_get(ab->lock);
+	mtx_lock(ab->lock);
 	ab->wish_sz = min_sz;
 	ab->max_sz  = max_sz;
-	lock_rel(ab->lock);
+	mtx_unlock(ab->lock);
 
 	aubuf_flush(ab);
 
@@ -216,6 +216,7 @@ int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb,
 {
 	struct frame *f;
 	size_t max_sz;
+	size_t sz;
 
 	if (!ab || !mb)
 		return EINVAL;
@@ -228,12 +229,17 @@ int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb,
 	if (af)
 		f->af = *af;
 
-	lock_write_get(ab->lock);
+	sz = mbuf_get_left(mb);
+
+	mtx_lock(ab->lock);
+	ab->pkt_sz = sz;
+	if (ab->fill_sz >= ab->pkt_sz)
+		ab->fill_sz -= ab->pkt_sz;
 
 	list_insert_sorted(&ab->afl, frame_less_equal, NULL, &f->le, f);
-	ab->cur_sz += mbuf_get_left(mb);
+	ab->cur_sz += sz;
 
-	max_sz = ab->started ? ab->max_sz : ab->wish_sz + 1;
+	max_sz = ab->started ? ab->max_sz : ab->wish_sz;
 	if (ab->max_sz && ab->cur_sz > max_sz) {
 #if AUBUF_DEBUG
 		if (ab->started) {
@@ -244,16 +250,12 @@ int aubuf_append_auframe(struct aubuf *ab, struct mbuf *mb,
 #endif
 		f = list_ledata(ab->afl.head);
 		if (f) {
-			ab->cur_sz -= mbuf_get_left(f->mb);
+			ab->cur_sz -= sz;
 			mem_deref(f);
 		}
 	}
 
-	if (ab->filling && ab->cur_sz >= ab->wish_sz)
-		ab->filling = false;
-
-	lock_rel(ab->lock);
-
+	mtx_unlock(ab->lock);
 	return 0;
 }
 
@@ -292,10 +294,10 @@ int aubuf_write_auframe(struct aubuf *ab, const struct auframe *af)
 
 	err = aubuf_append_auframe(ab, mb, af);
 
-	lock_write_get(ab->lock);
+	mtx_lock(ab->lock);
 	mem_deref(mb);
-	ajb = !ab->filling && ab->ajb;
-	lock_rel(ab->lock);
+	ajb = !ab->fill_sz && ab->ajb;
+	mtx_unlock(ab->lock);
 
 	if (ajb)
 		ajb_calc(ab->ajb, af, ab->cur_sz);
@@ -320,10 +322,11 @@ void aubuf_read_auframe(struct aubuf *ab, struct auframe *af)
 	if (!ab || !af)
 		return;
 
+	sz = auframe_size(af);
 	if (!ab->ajb && ab->mode == AUBUF_ADAPTIVE)
 		ab->ajb = ajb_alloc(ab->silence);
 
-	lock_write_get(ab->lock);
+	mtx_lock(ab->lock);
 	as = ajb_get(ab->ajb, af);
 	if (as == AJB_LOW) {
 #if AUBUF_DEBUG
@@ -333,27 +336,28 @@ void aubuf_read_auframe(struct aubuf *ab, struct auframe *af)
 		goto out;
 	}
 
-	sz = auframe_size(af);
-	if (ab->cur_sz < (ab->filling ? ab->wish_sz : sz)) {
+	if (ab->fill_sz || ab->cur_sz < sz) {
 #if AUBUF_DEBUG
-		if (!ab->filling) {
+		if (!ab->fill_sz) {
 			++ab->stats.ur;
-			(void)re_printf("aubuf: %p underrun (cur=%zu)\n",
-					ab, ab->cur_sz);
+			(void)re_printf("aubuf: %p underrun "
+					"(cur=%zu, sz=%zu)\n",
+					ab, ab->cur_sz, sz);
+			fflush(stdout);
 			plot_underrun(ab->ajb);
 		}
 #endif
-		if (!ab->filling)
-			ajb_reset(ab->ajb);
+		if (!ab->fill_sz)
+			ajb_set_ts0(ab->ajb, 0);
 
-		filling = ab->filling;
-		ab->filling = true;
+		filling = ab->fill_sz > 0;
 		memset(af->sampv, 0, sz);
 		if (filling)
 			goto out;
+		else
+			ab->fill_sz = ab->wish_sz;
 	}
 
-	ab->started = true;
 	read_auframe(ab, af);
 	if (as == AJB_HIGH) {
 #if AUBUF_DEBUG
@@ -364,7 +368,16 @@ void aubuf_read_auframe(struct aubuf *ab, struct auframe *af)
 	}
 
  out:
-	lock_rel(ab->lock);
+
+	if (ab->fill_sz && ab->fill_sz < ab->pkt_sz) {
+		if (ab->fill_sz >= sz)
+			ab->fill_sz -= sz;
+		else
+			ab->fill_sz = 0;
+	}
+
+	ab->started = true;
+	mtx_unlock(ab->lock);
 }
 
 
@@ -390,7 +403,7 @@ int aubuf_get(struct aubuf *ab, uint32_t ptime, uint8_t *p, size_t sz)
 	if (!ab || !ptime)
 		return EINVAL;
 
-	lock_write_get(ab->lock);
+	mtx_lock(ab->lock);
 
 	now = tmr_jiffies();
 	if (!ab->ts)
@@ -404,7 +417,7 @@ int aubuf_get(struct aubuf *ab, uint32_t ptime, uint8_t *p, size_t sz)
 	ab->ts += ptime;
 
  out:
-	lock_rel(ab->lock);
+	mtx_unlock(ab->lock);
 
 	if (!err)
 		aubuf_read(ab, p, sz);
@@ -423,14 +436,14 @@ void aubuf_flush(struct aubuf *ab)
 	if (!ab)
 		return;
 
-	lock_write_get(ab->lock);
+	mtx_lock(ab->lock);
 
 	list_flush(&ab->afl);
-	ab->filling = true;
+	ab->fill_sz = ab->wish_sz;
 	ab->cur_sz  = 0;
 	ab->ts      = 0;
 
-	lock_rel(ab->lock);
+	mtx_unlock(ab->lock);
 	ajb_reset(ab->ajb);
 }
 
@@ -450,16 +463,16 @@ int aubuf_debug(struct re_printf *pf, const struct aubuf *ab)
 	if (!ab)
 		return 0;
 
-	lock_read_get(ab->lock);
-	err = re_hprintf(pf, "wish_sz=%zu cur_sz=%zu filling=%d",
-			 ab->wish_sz, ab->cur_sz, ab->filling);
+	mtx_lock(ab->lock);
+	err = re_hprintf(pf, "wish_sz=%zu cur_sz=%zu fill_sz=%zu",
+			 ab->wish_sz, ab->cur_sz, ab->fill_sz);
 
 #if AUBUF_DEBUG
 	err |= re_hprintf(pf, " [overrun=%zu underrun=%zu]",
 			  ab->stats.or, ab->stats.ur);
 #endif
 
-	lock_rel(ab->lock);
+	mtx_unlock(ab->lock);
 
 	return err;
 }
@@ -479,9 +492,9 @@ size_t aubuf_cur_size(const struct aubuf *ab)
 	if (!ab)
 		return 0;
 
-	lock_read_get(ab->lock);
+	mtx_lock(ab->lock);
 	sz = ab->cur_sz;
-	lock_rel(ab->lock);
+	mtx_unlock(ab->lock);
 
 	return sz;
 }
@@ -501,10 +514,18 @@ void aubuf_sort_auframe(struct aubuf *ab)
 }
 
 
+/**
+ * This function is for reporting that the given audio frame was dropped. Its
+ * timestamp is used to reset the ajb structure to avoid a jump of the computed
+ * jitter value
+ *
+ * @param ab Audio buffer
+ * @param af Audio frame
+ */
 void aubuf_drop_auframe(struct aubuf *ab, const struct auframe *af)
 {
 	if (!ab)
 		return;
 
-	ajb_drop(ab->ajb, af);
+	ajb_set_ts0(ab->ajb, af->timestamp);
 }
