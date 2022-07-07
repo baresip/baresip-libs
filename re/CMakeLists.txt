@@ -12,13 +12,13 @@
 
 cmake_minimum_required(VERSION 3.7)
 
-project(re VERSION 2.4.0 LANGUAGES C)
+project(re VERSION 2.5.0 LANGUAGES C)
 
 # Pre-release identifier, comment out on a release
 # Increment for breaking changes (dev2, dev3...)
 # set(PROJECT_VERSION_PRE dev)
 
-set(PROJECT_SOVERSION 6) # bump if ABI breaks
+set(PROJECT_SOVERSION 7) # bump if ABI breaks
 
 if(PROJECT_VERSION_PRE)
   set(PROJECT_VERSION_FULL ${PROJECT_VERSION}-${PROJECT_VERSION_PRE})
@@ -214,7 +214,6 @@ set(HEADERS
   include/re_jbuf.h
   include/re_json.h
   include/re_list.h
-  include/re_lock.h
   include/re_main.h
   include/re_mbuf.h
   include/re_md5.h
@@ -492,6 +491,7 @@ if(USE_SIP)
     src/sip/keepalive.c
     src/sip/keepalive_udp.c
     src/sip/msg.c
+    src/sip/rack.c
     src/sip/reply.c
     src/sip/request.c
     src/sip/sip.c
@@ -513,6 +513,7 @@ if(USE_SIP)
     src/sipsess/info.c
     src/sipsess/listen.c
     src/sipsess/modify.c
+    src/sipsess/prack.c
     src/sipsess/reply.c
     src/sipsess/request.c
     src/sipsess/sess.c
@@ -551,16 +552,6 @@ elseif(UNIX)
   endif()
 endif()
 
-
-if(CMAKE_USE_WIN32_THREADS_INIT)
-  list(APPEND SRCS
-    src/lock/win32/lock.c
-  )
-else()
-  list(APPEND SRCS
-    src/lock/lock.c
-  )
-endif()
 
 if(HAVE_THREADS)
   #Do nothing
