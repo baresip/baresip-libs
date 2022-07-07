@@ -836,6 +836,29 @@ int test_fmt_param(void)
 }
 
 
+int test_fmt_gmtime(void)
+{
+	const char ref1[] = "Thu, 01 Jan 1970 00:00:00 GMT";
+	const char ref2[] = "Fri, 24 Jun 2022 07:22:34 GMT";
+	char buf[256];
+	uint64_t sec;
+	int n;
+	int err = 0;
+
+	sec = 0;
+	(void)re_snprintf(buf, sizeof(buf), "%H", fmt_gmtime, &sec);
+	TEST_STRCMP(ref1, strlen(ref1), buf, strlen(buf));
+
+	sec = 19167 * 3600 * 24 + 7*3600 + 22*60 + 34;
+	n = re_snprintf(buf, sizeof(buf), "%H", fmt_gmtime, &sec);
+	TEST_EQUALS(29, n);
+	TEST_STRCMP(ref2, strlen(ref2), buf, strlen(buf));
+
+ out:
+	return err;
+}
+
+
 int test_fmt_human_time(void)
 {
 	const char ref1[] = "1 day 2 hours 3 mins 4 secs";
@@ -851,6 +874,30 @@ int test_fmt_human_time(void)
 	sec = 0*24*60*60 + 0*60*60 + 1*60 + 2;
 	(void)re_snprintf(buf, sizeof(buf), "%H", fmt_human_time, &sec);
 	TEST_STRCMP(ref2, strlen(ref2), buf, strlen(buf));
+
+ out:
+	return err;
+}
+
+
+int test_fmt_timestamp(void)
+{
+	char buf[256];
+	struct pl pl;
+	int n;
+	int err = 0;
+
+	n = re_snprintf(buf, sizeof(buf), "%H", fmt_timestamp, NULL);
+	TEST_ASSERT(n >= 0);
+
+	pl_set_str(&pl, buf);
+	TEST_EQUALS(pl.l, (size_t)n);
+	TEST_EQUALS(pl.l, 12);
+
+	err = re_regex(pl.p, pl.l,
+		       "[0-2]1[0-9]1:[0-5]1[0-9]1:[0-5]1[0-9]1\\.[0-9]3",
+		       NULL, NULL, NULL, NULL, NULL, NULL, NULL);
+	TEST_ERR(err);
 
  out:
 	return err;
