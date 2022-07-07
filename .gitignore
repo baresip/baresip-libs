@@ -2,3 +2,4 @@
 /dist
 CMakeCache.txt
 CMakeFiles
+.cache
