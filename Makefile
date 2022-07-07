@@ -1,6 +1,7 @@
 .PHONY: build
 build:
-	cmake -B build && cmake --build build --parallel
+	[ -d build ] || cmake -B build
+	cmake --build build --parallel
 
 .PHONY: ninja
 ninja:
@@ -13,3 +14,8 @@ dist: build
 .PHONY: clean
 clean:
 	@rm -Rf build dist CMakeCache.txt CMakeFiles
+
+.PHONY: tidy
+tidy:
+	cmake -B build -DCLANG_TIDY=ON
+	cmake --build build --parallel

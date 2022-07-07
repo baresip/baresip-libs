@@ -1,0 +1,2 @@
+Checks:          'clang-diagnostic-*,clang-analyzer-*,cert-*,-cert-dcl37-c,-cert-dcl51-cpp,-clang-analyzer-valist.Uninitialized,-clang-analyzer-security.ins
+ecureAPI.DeprecatedOrUnsafeBufferHandling'

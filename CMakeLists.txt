@@ -11,6 +11,12 @@ project(baresip-libs)
 set(RE_LIBRARY re)
 set(REM_LIBRARY rem)
 
+option(CLANG_TIDY "Use clang-tidy" OFF)
+
+if(CLANG_TIDY)
+    set(CMAKE_C_CLANG_TIDY clang-tidy)
+endif()
+
 add_subdirectory(re)
 add_subdirectory(rem)
 add_subdirectory(test)
