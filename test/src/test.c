@@ -14,7 +14,9 @@
 #endif
 #include <string.h>
 #include <stdlib.h>
+#ifdef HAVE_SYS_TIME_H
 #include <sys/time.h>
+#endif
 #include <math.h>
 #include <re.h>
 #include "test.h"
@@ -758,7 +760,8 @@ int test_multithread(void)
 
 		err = thrd_create(&threadv[i].tid,
 				     thread_handler, (void *)&threadv[i]);
-		if (err) {
+		if (err != thrd_success) {
+			err = EAGAIN;
 			DEBUG_WARNING("thread_create failed (%m)\n", err);
 			break;
 		}
