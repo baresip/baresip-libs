@@ -145,7 +145,7 @@ int re_alloc(struct re **rep)
 	if (!re)
 		return ENOMEM;
 
-	err = mtx_alloc(&re->mutex);
+	err = mutex_alloc(&re->mutex);
 	if (err) {
 		DEBUG_WARNING("thread_init: mtx_init error\n");
 		goto out;
@@ -179,11 +179,10 @@ static void re_once(void)
 	int err;
 
 	err = tss_create(&key, thread_destructor);
-	if (err) {
-		DEBUG_WARNING("tss_create failed: %d\n", err);
-		exit(err);
+	if (err != thrd_success) {
+		DEBUG_WARNING("tss_create failed\n");
+		exit(ENOMEM);
 	}
-
 }
 
 
@@ -212,8 +211,8 @@ static inline void re_lock(struct re *re)
 	int err;
 
 	err = mtx_lock(re->mutexp);
-	if (err)
-		DEBUG_WARNING("re_lock: %m\n", err);
+	if (err != thrd_success)
+		DEBUG_WARNING("re_lock err\n");
 }
 
 
@@ -222,8 +221,8 @@ static inline void re_unlock(struct re *re)
 	int err;
 
 	err = mtx_unlock(re->mutexp);
-	if (err)
-		DEBUG_WARNING("re_unlock: %m\n", err);
+	if (err != thrd_success)
+		DEBUG_WARNING("re_unlock err\n");
 }
 
 
@@ -924,6 +923,7 @@ static int fd_poll(struct re *re)
 			return 0;
 		}
 
+		/* Handle only active events */
 		--n;
 	}
 
@@ -1171,6 +1171,32 @@ int re_debug(struct re_printf *pf, void *unused)
 
 
 /**
+ * Get number of active file descriptors
+ *
+ * @return nfds
+ */
+int re_nfds(void)
+{
+	struct re *re = re_get();
+
+	return re ? re->nfds : 0;
+}
+
+
+/**
+ * Get current async I/O polling method.
+ *
+ * @return enum poll_method
+ */
+enum poll_method poll_method_get(void)
+{
+	struct re *re = re_get();
+
+	return re ? re->method : METHOD_NULL;
+}
+
+
+/**
  * Set async I/O polling method. This function can also be called while the
  * program is running.
  *
@@ -1182,6 +1208,11 @@ int poll_method_set(enum poll_method method)
 {
 	struct re *re = re_get();
 	int err;
+
+	if (!re) {
+		DEBUG_WARNING("poll_method_set: re not ready\n");
+		return EINVAL;
+	}
 
 	err = fd_setsize(DEFAULT_MAXFDS);
 	if (err)
@@ -1257,8 +1288,10 @@ int re_thread_init(void)
 		re_global = re;
 
 	err = tss_set(key, re);
-	if (err)
+	if (err != thrd_success) {
+		err = ENOMEM;
 		DEBUG_WARNING("thread_init: tss_set error\n");
+	}
 
 	return err;
 }
