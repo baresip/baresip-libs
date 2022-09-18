@@ -8,8 +8,8 @@ cmake_minimum_required(VERSION 3.7)
 
 project(baresip-libs)
 
-set(RE_LIBRARY re)
-set(REM_LIBRARY rem)
+set(RE_LIBRARY re CACHE STRING "")
+set(REM_LIBRARY rem CACHE STRING "")
 
 option(CLANG_TIDY "Use clang-tidy" OFF)
 
