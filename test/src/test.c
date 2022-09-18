@@ -27,6 +27,14 @@
 #include <re_dbg.h>
 
 
+#ifdef WIN32
+#define open _open
+#define read _read
+#define write _write
+#define close _close
+#endif
+
+
 typedef int (test_exec_h)(void);
 
 struct test {
@@ -43,6 +51,7 @@ static const struct test tests[] = {
 	TEST(test_aubuf),
 	TEST(test_aulevel),
 	TEST(test_auresamp),
+	TEST(test_async),
 	TEST(test_av1),
 	TEST(test_base64),
 	TEST(test_bfcp),
@@ -92,9 +101,13 @@ static const struct test tests[] = {
 	TEST(test_hmac_sha256),
 	TEST(test_http),
 	TEST(test_http_loop),
+	TEST(test_http_large_body),
+	TEST(test_http_conn),
+	TEST(test_http_conn_large_body),
 #ifdef USE_TLS
 	TEST(test_https_loop),
 	TEST(test_http_client_set_tls),
+	TEST(test_https_large_body),
 #endif
 	TEST(test_httpauth_chall),
 	TEST(test_httpauth_resp),
@@ -163,6 +176,8 @@ static const struct test tests[] = {
 	TEST(test_sipsess_100rel_supported),
 	TEST(test_sipsess_100rel_420),
 	TEST(test_sipsess_100rel_421),
+	TEST(test_sipsess_update_uac),
+	TEST(test_sipsess_update_uas),
 	TEST(test_srtp),
 	TEST(test_srtcp),
 	TEST(test_srtp_gcm),
@@ -293,8 +308,13 @@ static void restore_output(int err)
 	(void)fclose(f);
 
 out:
+#ifdef WIN32
+	(void)_unlink("stdout.out");
+	(void)_unlink("stderr.out");
+#else
 	(void)unlink("stdout.out");
 	(void)unlink("stderr.out");
+#endif
 }
 
 
@@ -532,7 +552,7 @@ static int testcase_perf(const struct test *test, double *usec_avgp)
 
 	usec_avg = 1.0 * (usec_stop - usec_start) / (double)i;
 
-	n = usec_avg ? (REPEATS_USEC / usec_avg) : 0;
+	n = usec_avg ? (size_t)(REPEATS_USEC / usec_avg) : 0;
 	n = min(REPEATS_MAX, max(n, REPEATS_MIN));
 
 	/* now for the real measurement */
@@ -644,7 +664,7 @@ int test_perf(const char *name, bool verbose)
 				return err;
 			}
 
-			tim->nsec_avg = 1000.0 * usec_avg;
+			tim->nsec_avg = (uint64_t)(1000.0 * usec_avg);
 		}
 
 		/* sort the timing table by average time */
@@ -685,6 +705,8 @@ int test_reg(const char *name, bool verbose)
 	if (err)
 		return err;
 	(void)re_fprintf(stderr, "\x1b[32mOK\x1b[;m\n");
+
+	timeout_override = 0;
 
 	return err;
 }
@@ -758,9 +780,10 @@ int test_multithread(void)
 		threadv[i].test = &tests[ti];
 		threadv[i].err = -1;           /* error not set */
 
-		err = thrd_create(&threadv[i].tid,
-				     thread_handler, (void *)&threadv[i]);
-		if (err != thrd_success) {
+		err = thrd_success != thrd_create(&threadv[i].tid,
+						  thread_handler,
+						  (void *)&threadv[i]);
+		if (err) {
 			err = EAGAIN;
 			DEBUG_WARNING("thread_create failed (%m)\n", err);
 			break;
@@ -787,6 +810,8 @@ int test_multithread(void)
 	if (err)
 		return err;
 	(void)re_fprintf(stderr, "\x1b[32mOK\x1b[;m\n");
+
+	timeout_override = 0;
 
 	return err;
 }
@@ -963,17 +988,17 @@ int test_write_file(struct mbuf *mb, const char *filename)
 
 	for (;;) {
 		uint8_t buf[1024];
-		ssize_t n;
+		size_t count;
 
-		n = min(sizeof(buf), mbuf_get_left(mb));
-		if (n == 0)
+		count = min(sizeof(buf), mbuf_get_left(mb));
+		if (count == 0)
 			break;
 
-		err = mbuf_read_mem(mb, buf, n);
+		err = mbuf_read_mem(mb, buf, count);
 		if (err)
 			break;
 
-		n = write(fd, (void *)buf, n);
+		ssize_t n = write(fd, (void *)buf, (unsigned int)count);
 		if (n < 0) {
 			err = errno;
 			break;
