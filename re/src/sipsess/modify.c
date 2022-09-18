@@ -33,7 +33,7 @@ static void reinvite_resp_handler(int err, const struct sip_msg *msg,
 	const struct sip_hdr *hdr;
 	struct mbuf *desc = NULL;
 
-	if (err || sip_request_loops(&sess->ls, msg->scode))
+	if (!msg || err || sip_request_loops(&sess->ls, msg->scode))
 		goto out;
 
 	if (msg->scode < 200) {
@@ -43,8 +43,9 @@ static void reinvite_resp_handler(int err, const struct sip_msg *msg,
 
 		(void)sip_dialog_update(sess->dlg, msg);
 
-		if (sess->sent_offer)
+		if (sess->sent_offer) {
 			(void)sess->answerh(msg, sess->arg);
+		}
 		else {
 			sess->modify_pending = false;
 			(void)sess->offerh(&desc, msg, sess->arg);
@@ -52,6 +53,7 @@ static void reinvite_resp_handler(int err, const struct sip_msg *msg,
 
 		(void)sipsess_ack(sess->sock, sess->dlg, msg->cseq.num,
 				  sess->auth, sess->ctype, desc);
+
 		mem_deref(desc);
 	}
 	else {
@@ -101,6 +103,7 @@ static void reinvite_resp_handler(int err, const struct sip_msg *msg,
 		sipsess_terminate(sess, err, NULL);
 	else if (sess->modify_pending)
 		(void)sipsess_reinvite(sess, true);
+
 	else
 		sess->desc = mem_deref(sess->desc);
 }
@@ -158,16 +161,18 @@ int sipsess_reinvite(struct sipsess *sess, bool reset_ls)
  */
 int sipsess_modify(struct sipsess *sess, struct mbuf *desc)
 {
-	if (!sess || sess->st || sess->terminated)
+	if (!sess || (sess->st && sess->established) || sess->terminated)
 		return EINVAL;
 
 	mem_deref(sess->desc);
 	sess->desc = mem_ref(desc);
 
+	if (!sess->established)
+		return sipsess_update(sess);
+
 	if (sess->req || sess->tmr.th || sess->replyl.head) {
 		sess->modify_pending = true;
 		return 0;
 	}
-
 	return sipsess_reinvite(sess, true);
 }

@@ -23,8 +23,8 @@ int mutex_alloc(mtx_t **mtx)
 	if (!m)
 		return ENOMEM;
 
-	err = mtx_init(m, mtx_plain);
-	if (err != thrd_success) {
+	err = mtx_init(m, mtx_plain) != thrd_success;
+	if (err) {
 		err = ENOMEM;
 		goto out;
 	}
@@ -44,10 +44,18 @@ out:
 int thread_create_name(thrd_t *thr, const char *name, thrd_start_t func,
 		     void *arg)
 {
+	int ret;
 	(void)name;
 
 	if (!thr || !func)
 		return EINVAL;
 
-	return (thrd_create(thr, func, arg) == thrd_success) ? 0 : EAGAIN;
+	ret = thrd_create(thr, func, arg);
+	if (ret == thrd_success)
+		return 0;
+
+	if (ret == thrd_nomem)
+		return ENOMEM;
+
+	return EAGAIN;
 }

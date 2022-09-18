@@ -6,7 +6,7 @@
 
 # Main version number
 VER_MAJOR := 2
-VER_MINOR := 5
+VER_MINOR := 7
 VER_PATCH := 0
 
 # Development version, comment out on a release
@@ -14,7 +14,7 @@ VER_PATCH := 0
 # VER_PRE   := dev
 
 # bump Major if ABI breaks
-ABI_MAJOR := 7
+ABI_MAJOR := 9
 ABI_AGE   := $(VER_MINOR)
 ABI_REV   := $(VER_PATCH)
 
@@ -43,7 +43,7 @@ MODULES += dns
 MODULES += md5 crc32 sha hmac base64
 MODULES += udp sa net tcp tls
 MODULES += list mbuf hash
-MODULES += fmt tmr trace btrace main mem dbg sys thread mqueue
+MODULES += fmt tmr trace btrace main mem dbg sys thread mqueue async
 MODULES += mod conf
 MODULES += bfcp
 MODULES += aes srtp

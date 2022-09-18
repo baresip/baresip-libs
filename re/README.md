@@ -101,6 +101,7 @@ Patches can sent via Github
 | Name     | Status   | Description                                    |
 |----------|----------|------------------------------------------------|
 | aes      | stable   | AES (Advanced Encryption Standard)             |
+| async    | testing  | Async module                                   |
 | base64   | stable   | Base-64 encoding/decoding functions            |
 | bfcp     | stable   | The Binary Floor Control Protocol (BFCP)       |
 | conf     | stable   | Configuration file parser                      |
@@ -116,7 +117,6 @@ Patches can sent via Github
 | jbuf     | stable   | Jitter buffer                                  |
 | json     | stable   | JavaScript Object Notation (JSON)              |
 | list     | stable   | Sortable doubly-linked list handling           |
-| lock     | stable   | Resource locking functions                     |
 | main     | stable   | Main poll loop                                 |
 | mbuf     | stable   | Linear memory buffers                          |
 | md5      | stable   | The MD5 Message-Digest Algorithm (RFC 1321)    |
@@ -144,10 +144,10 @@ Patches can sent via Github
 | tls      | stable   | Transport Layer Security                       |
 | tmr      | stable   | Timer handling                                 |
 | turn     | stable   | Obtaining Relay Addresses from STUN (TURN)     |
+| trace    | testing  | Trace Helpers JSON traces (chrome://tracing)   |
 | udp      | stable   | UDP transport                                  |
 | uri      | stable   | Generic URI library                            |
 | websock  | stable   | WebSocket Client and Server                    |
-| trace    | testing  | Trace Helpers JSON traces (chrome://tracing)   |
 
 legend:
 * *stable* - code complete; stable code and stable API
@@ -170,6 +170,7 @@ legend:
 * [RFC 3263](https://tools.ietf.org/html/rfc3263) - Locating SIP Servers
 * [RFC 3264](https://tools.ietf.org/html/rfc3264) - An Offer/Answer Model with SDP
 * [RFC 3265](https://tools.ietf.org/html/rfc3265) - SIP-Specific Event Notification
+* [RFC 3311](https://tools.ietf.org/html/rfc3311) - The SIP UPDATE Method
 * [RFC 3327](https://tools.ietf.org/html/rfc3327) - SIP Extension Header Field for Registering Non-Adjacent Contacts
 * [RFC 3428](https://tools.ietf.org/html/rfc3428) - SIP Extension for Instant Messaging
 * [RFC 3489](https://tools.ietf.org/html/rfc3489) - STUN - Simple Traversal of UDP Through NATs
@@ -212,15 +213,14 @@ legend:
 
 |  System | Support type | Supported versions | Notes |
 |---|---|---|---|
-| Linux | Tier 1 | glibc >= 2.17 (CentOS 7) | |
+| Linux | Tier 1 | glibc >= 2.27 (Ubuntu 18.04) | |
 | macOS | Tier 1 | macOS >= 10.10 | |
-| Windows | Tier 1 | >= Windows 8 | MinGW-w64 |
+| Windows | Tier 1 | >= Windows 8 | MinGW-w64, >= VS 2019 |
 | Android | Tier 2 | | |
 | iOS | Tier 2 | | |
 | FreeBSD | Tier 2 | >= 11 | |
 | OpenBSD | Tier 2 | >= 6.7 | |
 | Linux | Tier 2 | uClibc | |
-| Windows | Tier 3 | | e.g. VS 2015 |
 
 
 ### Support types

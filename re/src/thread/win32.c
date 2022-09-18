@@ -85,11 +85,11 @@ int thrd_create(thrd_t *thr, thrd_start_t func, void *arg)
 	uintptr_t handle;
 
 	if (!thr || !func)
-		return EINVAL;
+		return thrd_error;
 
 	th = mem_alloc(sizeof(struct thread), NULL);
 	if (!th)
-		return ENOMEM;
+		return thrd_nomem;
 
 	th->func = func;
 	th->arg	 = arg;
@@ -200,6 +200,17 @@ int cnd_signal(cnd_t *cnd)
 		return thrd_error;
 
 	WakeConditionVariable(cnd);
+
+	return thrd_success;
+}
+
+
+int cnd_broadcast(cnd_t *cnd)
+{
+	if (!cnd)
+		return thrd_error;
+
+	WakeAllConditionVariable(cnd);
 
 	return thrd_success;
 }

@@ -6,6 +6,10 @@
 
 #include <sys/types.h>
 
+#ifdef __cplusplus
+#define restrict
+#endif
+
 #ifdef _MSC_VER
 #include <stdlib.h>
 
@@ -45,6 +49,8 @@ typedef SSIZE_T ssize_t;
 /** Align a value to the boundary of mask */
 #define ALIGN_MASK(x, mask)    (((x)+(mask))&~(mask))
 
+/** Check alignment of pointer (p) and byte count (c) **/
+#define is_aligned(p, c) (((uintptr_t)(const void *)(p)) % (c) == 0)
 
 /** Get the minimal value */
 #undef MIN
@@ -239,5 +245,16 @@ typedef SSIZE_T ssize_t;
  * Give the compiler a hint which branch is "likely" or "unlikely" (inspired
  * by linux kernel and C++20/C2X)
  */
+#ifdef __GNUC__
 #define likely(x)       __builtin_expect(!!(x), 1)
 #define unlikely(x)     __builtin_expect(!!(x), 0)
+#else
+#define likely(x) x
+#define unlikely(x) x
+#endif
+
+#ifdef WIN32
+#define re_restrict __restrict
+#else
+#define re_restrict restrict
+#endif

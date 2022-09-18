@@ -10,50 +10,35 @@
 # Versioning
 #
 
-cmake_minimum_required(VERSION 3.7)
+cmake_minimum_required(VERSION 3.10)
 
-project(re VERSION 2.5.0 LANGUAGES C)
+project(re
+  VERSION 2.7.0
+  LANGUAGES C
+  HOMEPAGE_URL https://github.com/baresip/re
+  DESCRIPTION "Generic library for real-time communications"
+)
 
-# Pre-release identifier, comment out on a release
-# Increment for breaking changes (dev2, dev3...)
-# set(PROJECT_VERSION_PRE dev)
+set(PROJECT_SOVERSION 9) # bump if ABI breaks
 
-set(PROJECT_SOVERSION 7) # bump if ABI breaks
-
-if(PROJECT_VERSION_PRE)
-  set(PROJECT_VERSION_FULL ${PROJECT_VERSION}-${PROJECT_VERSION_PRE})
-else()
-  set(PROJECT_VERSION_FULL ${PROJECT_VERSION})
-endif()
-
+list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
 ##############################################################################
 #
 # Module/Package Includes
 #
 include(GNUInstallDirs)
-include(CheckIncludeFile)
-include(CheckFunctionExists)
-find_package(Backtrace)
-find_package(Threads REQUIRED)
-find_package(OpenSSL)
-
-check_symbol_exists("arc4random" "stdlib.h" HAVE_ARC4RANDOM)
-if(HAVE_ARC4RANDOM)
-  add_definitions(-DHAVE_ARC4RANDOM)
-endif()
 
 ##############################################################################
 #
-# Compile options
+# Options
 #
 
-option(USE_OPENSSL "Enable OpenSSL" ${OPENSSL_FOUND})
 option(USE_BFCP "Enable BFCP" ON)
+option(USE_JBUF "Enable JBUF" ON)
 option(USE_PCP "Enable PCP" ON)
 option(USE_RTMP "Enable RTMP" ON)
 option(USE_SIP "Enable SIP" ON)
-
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 set(CMAKE_C_STANDARD 11)
@@ -63,6 +48,7 @@ if(MSVC)
   add_compile_options("/W3")
 else()
   add_compile_options(
+    -pedantic
     -Wall
     -Wbad-function-cast
     -Wcast-align
@@ -70,132 +56,39 @@ else()
     -Wmissing-declarations
     -Wmissing-prototypes
     -Wnested-externs
+    -Wno-strict-aliasing
     -Wold-style-definition
     -Wshadow -Waggregate-return
     -Wstrict-prototypes
+    -Wuninitialized
     -Wvla
   )
 endif()
 
+if(CMAKE_C_COMPILER_ID MATCHES "Clang")
+  add_compile_options(-Wshorten-64-to-32 -Watomic-implicit-seq-cst)
+endif()
 
 if(CMAKE_C_COMPILER_ID MATCHES "Clang")
-  add_compile_options(-Wshorten-64-to-32)
   # Ensure struct mem is aligned (used as fat pointer)
   set_source_files_properties(src/mem/mem.c PROPERTIES COMPILE_FLAGS -Wpadded)
 endif()
 
-
-check_include_file(unistd.h HAVE_UNISTD_H)
-if(HAVE_UNISTD_H)
-  add_definitions(-DHAVE_UNISTD_H)
-endif()
-
-if(Backtrace_FOUND)
-  add_definitions(-DHAVE_EXECINFO)
-else()
-  set(Backtrace_LIBRARIES)
-endif()
-
-check_function_exists(thrd_create HAVE_THREADS)
-if(HAVE_THREADS)
-  add_definitions(-DHAVE_THREADS)
-endif()
-
-if(CMAKE_USE_PTHREADS_INIT)
-  add_definitions(-DHAVE_PTHREAD)
-  set(HAVE_PTHREAD ON)
-endif()
-
-add_definitions(
-  -DHAVE_ATOMIC
-  -DHAVE_INET6
-  -DHAVE_SELECT
-  )
-
-
-if(UNIX)
-  add_definitions(
-    -DHAVE_POLL
-    -DHAVE_PWD_H
-    -DHAVE_ROUTE_LIST
-    -DHAVE_SETRLIMIT
-    -DHAVE_STRERROR_R
-    -DHAVE_STRINGS_H
-    -DHAVE_SYS_TIME_H
-    -DHAVE_UNAME
-    -DHAVE_SELECT_H
-    -DHAVE_SIGNAL
-    )
-  if(NOT ANDROID)
-    add_definitions(-DHAVE_GETIFADDRS)
-  endif()
-endif()
-
-
-if(MSVC)
-  add_definitions(
-    -DHAVE_IO_H
-    -D_CRT_SECURE_NO_WARNINGS
-  )
-endif()
-
-if(WIN32)
-  add_definitions(
-    -DWIN32 -D_WIN32_WINNT=0x0600
-  )
-endif()
-
-if(USE_OPENSSL)
-  add_definitions(
-    -DUSE_DTLS
-    -DUSE_OPENSSL
-    -DUSE_OPENSSL_AES
-    -DUSE_OPENSSL_DTLS
-    -DUSE_OPENSSL_HMAC
-    -DUSE_OPENSSL_SRTP
-    -DUSE_TLS
-  )
-endif()
-
-
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  add_definitions(-DHAVE_KQUEUE -DDARWIN)
-  include_directories(/opt/local/include)
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "FreeBSD")
-  add_definitions(-DHAVE_KQUEUE -DFREEBSD)
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "OpenBSD")
-  add_definitions(-DHAVE_KQUEUE -DOPENBSD)
-elseif(${CMAKE_SYSTEM_NAME} MATCHES "Linux")
-  add_definitions(-DHAVE_EPOLL -DLINUX)
-endif()
-
-
-add_definitions(
-  -DARCH="${CMAKE_SYSTEM_PROCESSOR}"
-  -DOS="${CMAKE_SYSTEM_NAME}"
-  -DVERSION="${PROJECT_VERSION}"
-  -DVER_MAJOR=${PROJECT_VERSION_MAJOR}
-  -DVER_MINOR=${PROJECT_VERSION_MINOR}
-  -DVER_PATCH=${PROJECT_VERSION_PATCH}
-)
-
-if(${CMAKE_BUILD_TYPE} MATCHES "[Rr]el")
-  add_definitions(-DRELEASE)
-endif()
-
-
+set(re_DIR ${CMAKE_CURRENT_LIST_DIR}/cmake)
+find_package(re CONFIG REQUIRED)
 ##############################################################################
 #
 # Source/Header section
 #
 
 set(HEADERS
+  include/re.h
   include/re_aes.h
+  include/re_async.h
   include/re_atomic.h
   include/re_av1.h
   include/re_base64.h
   include/re_bfcp.h
-  include/re_bitv.h
   include/re_btrace.h
   include/re_conf.h
   include/re_convert.h
@@ -203,13 +96,12 @@ set(HEADERS
   include/re_dbg.h
   include/re_dns.h
   include/re_fmt.h
-  include/re.h
   include/re_h264.h
   include/re_h265.h
   include/re_hash.h
   include/re_hmac.h
-  include/re_httpauth.h
   include/re_http.h
+  include/re_httpauth.h
   include/re_ice.h
   include/re_jbuf.h
   include/re_json.h
@@ -223,14 +115,15 @@ set(HEADERS
   include/re_msg.h
   include/re_net.h
   include/re_odict.h
+  include/re_pcp.h
   include/re_rtmp.h
   include/re_rtp.h
   include/re_sa.h
   include/re_sdp.h
   include/re_sha.h
   include/re_shim.h
-  include/re_sipevent.h
   include/re_sip.h
+  include/re_sipevent.h
   include/re_sipreg.h
   include/re_sipsess.h
   include/re_srtp.h
@@ -238,6 +131,7 @@ set(HEADERS
   include/re_sys.h
   include/re_tcp.h
   include/re_telev.h
+  include/re_thread.h
   include/re_tls.h
   include/re_tmr.h
   include/re_trace.h
@@ -255,13 +149,13 @@ set(SRCS
   src/av1/obu.c
   src/av1/pkt.c
 
+  src/async/async.c
+
   src/base64/b64.c
 
   src/btrace/btrace.c
 
   src/conf/conf.c
-
-  src/crc32/crc32.c
 
   src/dbg/dbg.c
 
@@ -315,8 +209,6 @@ set(SRCS
   src/ice/icestr.c
   src/ice/stunsrv.c
   src/ice/util.c
-
-  src/jbuf/jbuf.c
 
   src/json/decode.c
   src/json/decode_odict.c
@@ -452,6 +344,13 @@ if(USE_BFCP)
 endif()
 
 
+if(USE_JBUF)
+  list(APPEND SRCS
+    src/jbuf/jbuf.c
+  )
+endif()
+
+
 if(USE_PCP)
   list(APPEND SRCS
     src/pcp/msg.c
@@ -517,6 +416,7 @@ if(USE_SIP)
     src/sipsess/reply.c
     src/sipsess/request.c
     src/sipsess/sess.c
+    src/sipsess/update.c
   )
 endif()
 
@@ -552,6 +452,9 @@ elseif(UNIX)
   endif()
 endif()
 
+list(APPEND SRCS
+  src/crc32/crc32.c
+)
 
 if(HAVE_THREADS)
   #Do nothing
@@ -590,6 +493,8 @@ add_library(re-objs OBJECT ${SRCS} ${HEADERS})
 
 set_target_properties(re-objs PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
+target_compile_definitions(re-objs PRIVATE ${RE_DEFINITIONS})
+
 target_include_directories(re-objs PRIVATE .)
 target_include_directories(re-objs PRIVATE include ${OPENSSL_INCLUDE_DIR})
 
@@ -622,6 +527,8 @@ else()
     ${OPENSSL_LIBRARIES}
     ${Backtrace_LIBRARIES}
     ${CMAKE_THREAD_LIBS_INIT}
+    ${ZLIB_LIBRARIES}
+    ${CMAKE_DL_LIBS}
   )
 endif()
 
@@ -659,34 +566,47 @@ endif()
 
 ##############################################################################
 #
-# Install section
-#
-
-install(TARGETS re-shared re
-  LIBRARY
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    COMPONENT re_run
-  ARCHIVE
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    COMPONENT re_dev
-  PUBLIC_HEADER
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/re
-    COMPONENT re_dev
-)
-
-install(TARGETS re-shared
-  LIBRARY
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    NAMELINK_ONLY
-    COMPONENT re_dev
-)
-
-
-##############################################################################
-#
 # Packaging section
 #
 
 if(CMAKE_SOURCE_DIR STREQUAL CMAKE_CURRENT_SOURCE_DIR)
   add_subdirectory(packaging)
 endif()
+
+configure_file(packaging/libre.pc.in libre.pc @ONLY)
+
+
+##############################################################################
+#
+# Install section
+#
+
+install(TARGETS re-shared re
+  LIBRARY
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT Libraries
+    NAMELINK_SKIP
+  ARCHIVE
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    COMPONENT Development
+  PUBLIC_HEADER
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/re
+    COMPONENT Development
+)
+
+install(TARGETS re-shared
+  LIBRARY
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}
+    NAMELINK_ONLY
+    COMPONENT Development
+)
+
+install(FILES cmake/re-config.cmake
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/re
+  COMPONENT Development
+)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/libre.pc
+  DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+  COMPONENT Development
+)
