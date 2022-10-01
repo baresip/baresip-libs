@@ -13,13 +13,20 @@
 cmake_minimum_required(VERSION 3.10)
 
 project(re
-  VERSION 2.7.0
+  VERSION 2.9.0
   LANGUAGES C
   HOMEPAGE_URL https://github.com/baresip/re
   DESCRIPTION "Generic library for real-time communications"
 )
 
-set(PROJECT_SOVERSION 9) # bump if ABI breaks
+# Pre-release identifier, comment out on a release
+# Increment for breaking changes (dev2, dev3...)
+set(PROJECT_VERSION_FULL ${PROJECT_VERSION}-dev)
+
+# comment in on a release
+#set(PROJECT_VERSION_FULL ${PROJECT_VERSION})
+
+set(PROJECT_SOVERSION 10) # bump if ABI breaks
 
 list(APPEND CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/cmake)
 
@@ -76,6 +83,14 @@ endif()
 
 set(re_DIR ${CMAKE_CURRENT_LIST_DIR}/cmake)
 find_package(re CONFIG REQUIRED)
+
+list(APPEND RE_DEFINITIONS
+  -DVERSION="${PROJECT_VERSION_FULL}"
+  -DVER_MAJOR=${PROJECT_VERSION_MAJOR}
+  -DVER_MINOR=${PROJECT_VERSION_MINOR}
+  -DVER_PATCH=${PROJECT_VERSION_PATCH}
+)
+
 ##############################################################################
 #
 # Source/Header section
@@ -486,6 +501,47 @@ endif()
 
 ##############################################################################
 #
+# Linking LIBS
+#
+
+set(LINKLIBS Threads::Threads)
+
+if(BACKTRACE_FOUND)
+  list(APPEND LINKLIBS ${Backtrace_LIBRARIES})
+endif()
+
+if(ZLIB_FOUND)
+  list(APPEND LINKLIBS ZLIB::ZLIB)
+endif()
+
+if(USE_OPENSSL)
+  list(APPEND LINKLIBS OpenSSL::SSL OpenSSL::Crypto)
+endif()
+
+if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
+  list(APPEND LINKLIBS
+    "-framework SystemConfiguration" "-framework CoreFoundation"
+  )
+endif()
+
+if(WIN32)
+  list(APPEND LINKLIBS
+    qwave
+    iphlpapi
+    wsock32
+    ws2_32
+  )
+endif()
+
+if(UNIX)
+  list(APPEND LINKLIBS
+    ${CMAKE_DL_LIBS}
+  )
+endif()
+
+
+##############################################################################
+#
 # Main target object
 #
 
@@ -505,34 +561,9 @@ target_include_directories(re-objs PRIVATE include ${OPENSSL_INCLUDE_DIR})
 #
 
 add_library(re-shared SHARED $<TARGET_OBJECTS:re-objs>)
-
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  target_link_libraries(re-shared
-    PRIVATE "-framework SystemConfiguration" "-framework CoreFoundation"
-  )
-endif()
-
-if(WIN32)
-  target_link_libraries(re-shared PRIVATE
-    ${OPENSSL_LIBRARIES}
-    qwave
-    iphlpapi
-    wsock32
-    ws2_32
-    ${CMAKE_THREAD_LIBS_INIT}
-  )
-else()
-  target_link_libraries(re-shared PRIVATE
-    -L/opt/local/lib
-    ${OPENSSL_LIBRARIES}
-    ${Backtrace_LIBRARIES}
-    ${CMAKE_THREAD_LIBS_INIT}
-    ${ZLIB_LIBRARIES}
-    ${CMAKE_DL_LIBS}
-  )
-endif()
-
-set_target_properties(re-shared PROPERTIES VERSION ${PROJECT_VERSION})
+target_link_libraries(re-shared PRIVATE ${LINKLIBS})
+set_target_properties(re-shared PROPERTIES VERSION
+  ${PROJECT_SOVERSION}.${PROJECT_VERSION_MINOR}.${PROJECT_VERSION_PATCH})
 set_target_properties(re-shared PROPERTIES SOVERSION ${PROJECT_SOVERSION})
 set_target_properties(re-shared PROPERTIES OUTPUT_NAME "re")
 
@@ -543,20 +574,8 @@ set_target_properties(re-shared PROPERTIES OUTPUT_NAME "re")
 #
 
 add_library(re STATIC $<TARGET_OBJECTS:re-objs>)
-
-if(${CMAKE_SYSTEM_NAME} MATCHES "Darwin")
-  target_link_libraries(re
-    PUBLIC "-framework SystemConfiguration" "-framework CoreFoundation"
-  )
-endif()
-
-target_link_libraries(re
-  PUBLIC ${OPENSSL_LIBRARIES} ${Backtrace_LIBRARIES} ${CMAKE_THREAD_LIBS_INIT}
-  PRIVATE -L/opt/local/lib
-)
-
+target_link_libraries(re PUBLIC ${LINKLIBS})
 target_include_directories(re PUBLIC include)
-
 set_target_properties(re PROPERTIES PUBLIC_HEADER "${HEADERS}")
 
 if(MSVC)
