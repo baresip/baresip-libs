@@ -19,3 +19,7 @@ clean:
 tidy:
 	cmake -B build -DCLANG_TIDY=ON
 	cmake --build build --parallel
+
+.PHONY: test
+test: build
+	build/test/retest -d test/data -r
